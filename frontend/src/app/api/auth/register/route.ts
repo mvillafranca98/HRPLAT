@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, name, dni, rtn, phoneNumber, address, startDate } = await request.json();
 
     // Validation
     if (!email || !password) {
@@ -36,12 +36,20 @@ export async function POST(request: NextRequest) {
     // Hash the password using bcrypt (10 rounds is a good default)
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Parse startDate if provided
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+
     // Create new user with hashed password
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword, // Store hashed password, NOT plain text
         name: name || null,
+        dniNumber: dni || null,
+        rtn: rtn || null,
+        phoneNumber: phoneNumber || null,
+        address: address || null,
+        startDate: parsedStartDate,
       },
     });
 

@@ -11,7 +11,12 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String   // This will store the hashed password
-  name      String?
+  name      String?  // Nombre completo
+  dni       String?  // Documento Nacional de Identidad
+  rtn       String?  // Registro Tributario Nacional
+  phoneNumber String? // Número de teléfono
+  address   String?  // Dirección de domicilio
+  startDate DateTime? // Fecha de inicio en la empresa
   role      String   @default("user")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
