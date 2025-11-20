@@ -19,6 +19,7 @@ function RegisterForm() {
   const [isFromDashboard, setIsFromDashboard] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [position, setPosition] = useState('');
 
   useEffect(() => {
     // Check if user came from dashboard or is already logged in
@@ -60,7 +61,8 @@ function RegisterForm() {
           rtn,
           phoneNumber,
           address,
-          startDate: startDate || null
+          startDate: startDate || null,
+          position,
         }),
       });
 
@@ -253,6 +255,22 @@ function RegisterForm() {
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
               />
             </div>
+
+            <div>
+            <label htmlFor="position" className="block text-sm font-medium text-gray-700">
+              Cargo/Puesto *
+            </label>
+            <input
+              id="position"
+              name="position"
+              type="text"
+              required
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+              placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador, etc."
+            />
+          </div>
           </div>
 
           <div>

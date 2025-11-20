@@ -13,6 +13,7 @@ interface Employee {
   phoneNumber: string | null;
   address: string | null;
   startDate: Date | null;
+  position: string | null;
 }
 
 export default function EditEmployeePage() {
@@ -28,6 +29,7 @@ export default function EditEmployeePage() {
     phoneNumber: '',
     address: '',
     startDate: '',
+    position: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,6 +69,7 @@ export default function EditEmployeePage() {
         startDate: employee.startDate 
           ? new Date(employee.startDate).toISOString().split('T')[0]
           : '',
+          position: employee.position || '',
       });
     } catch (err) {
       console.error('Error fetching employee:', err);
@@ -261,6 +264,22 @@ export default function EditEmployeePage() {
                   value={formData.startDate}
                   onChange={handleChange}
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="position" className="block text-sm font-medium text-gray-700">
+                  Cargo/Puesto *
+                </label>
+                <input
+                  id="position"
+                  name="position"
+                  type="text"
+                  required
+                  value={formData.position}
+                  onChange={handleChange}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador"
                 />
               </div>
             </div>

@@ -20,6 +20,7 @@ export async function GET(
         phoneNumber: true,
         address: true,
         startDate: true,
+        position: true,
         role: true,
       },
     });
@@ -48,7 +49,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, email, dni, rtn, phoneNumber, address, startDate } = await request.json();
+    const { name, email, dni, rtn, phoneNumber, address, startDate, position } = await request.json();
 
     // Validation
     if (!email) {
@@ -98,6 +99,7 @@ export async function PUT(
         phoneNumber: phoneNumber || null,
         address: address || null,
         startDate: parsedStartDate,
+        position: position || null,
       },
       select: {
         id: true,
@@ -108,6 +110,7 @@ export async function PUT(
         phoneNumber: true,
         address: true,
         startDate: true,
+        position: true,
         role: true,
         updatedAt: true,
       },
