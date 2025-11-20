@@ -1,10 +1,34 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function Dashboard() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    // Check if employee was just added
+    if (searchParams.get('employeeAdded') === 'true') {
+      setShowSuccess(true);
+      // Remove query parameter from URL
+      router.replace('/dashboard', { scroll: false });
+      // Hide message after 5 seconds
+      setTimeout(() => setShowSuccess(false), 5000);
+    }
+  }, [searchParams, router]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {showSuccess && (
+            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+              ¡Empleado agregado exitosamente!
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="mt-2 text-gray-600">Bienvenido a la Plataforma de Recursos Humanos</p>
           
@@ -26,7 +50,7 @@ export default function Dashboard() {
             </Link>
 
             <Link
-              href="/register"
+              href="/register?from=dashboard"
               className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
             >
               <div className="flex-shrink-0">

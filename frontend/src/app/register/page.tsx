@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,7 +16,19 @@ export default function RegisterPage() {
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isFromDashboard, setIsFromDashboard] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Check if user came from dashboard or is already logged in
+    const fromDashboard = searchParams.get('from') === 'dashboard';
+    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('userEmail') !== null;
+    
+    if (fromDashboard || isLoggedIn) {
+      setIsFromDashboard(true);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +67,14 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Registration successful - redirect to login
-        router.push('/?registered=true');
+        // Registration successful - redirect based on context
+        if (isFromDashboard) {
+          // If coming from dashboard, go back to dashboard
+          router.push('/dashboard?employeeAdded=true');
+        } else {
+          // If new user registration, go to login
+          router.push('/?registered=true');
+        }
       } else {
         setError(data.error || 'Error al crear la cuenta');
       }
@@ -72,7 +90,9 @@ export default function RegisterPage() {
       <div className="max-w-2xl w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Plataforma de Recursos Humanos</h1>
-          <p className="mt-2 text-gray-600">Crea una nueva cuenta</p>
+          <p className="mt-2 text-gray-600">
+            {isFromDashboard ? 'Agregar Nuevo Empleado' : 'Crea una nueva cuenta'}
+          </p>
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -245,15 +265,40 @@ export default function RegisterPage() {
             </button>
           </div>
 
-          <div className="text-center text-sm">
-            <span className="text-gray-600">¿Ya tienes una cuenta? </span>
-            <Link href="/" className="font-medium text-indigo-600 hover:text-indigo-500">
-              Inicia sesión
-            </Link>
-          </div>
+          {!isFromDashboard && (
+            <div className="text-center text-sm">
+              <span className="text-gray-600">¿Ya tienes una cuenta? </span>
+              <Link href="/" className="font-medium text-indigo-600 hover:text-indigo-500">
+                Inicia sesión
+              </Link>
+            </div>
+          )}
+          
+          {isFromDashboard && (
+            <div className="text-center text-sm">
+              <Link href="/dashboard" className="font-medium text-indigo-600 hover:text-indigo-500">
+                ← Volver al Dashboard
+              </Link>
+            </div>
+          )}
         </form>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
 

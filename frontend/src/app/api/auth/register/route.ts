@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         email,
         password: hashedPassword, // Store hashed password, NOT plain text
         name: name || null,
-        dniNumber: dni || null,
+        dni: dni || null,
         rtn: rtn || null,
         phoneNumber: phoneNumber || null,
         address: address || null,
