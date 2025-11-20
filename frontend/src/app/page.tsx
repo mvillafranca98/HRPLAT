@@ -26,19 +26,22 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // Store user email in localStorage for navbar display
+        // Store user data in localStorage for navbar display and role-based access
         if (data.user?.email && typeof window !== 'undefined') {
           localStorage.setItem('userEmail', data.user.email);
           if (data.user?.name) {
             localStorage.setItem('userName', data.user.name);
           }
+          if (data.user?.role) {
+            localStorage.setItem('userRole', data.user.role);
+          }
         }
         router.push('/dashboard');
       } else {
-        setError('Invalid email or password');
+        setError('Contraseño o correo electrónico incorrectos');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('Se produjo un error. Por favor, inténtelo de nuevo.');
     } finally {
       setLoading(false);
     }

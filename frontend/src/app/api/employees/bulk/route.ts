@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 interface BulkEmployee {
   email: string;
@@ -12,11 +13,39 @@ interface BulkEmployee {
   address?: string;
   startDate?: string | null;
   position?: string;
+  role?: string;
+}
+
+// Role hierarchy levels
+const roleHierarchy: Record<string, number> = {
+  Admin: 4,
+  HR_Staff: 3,
+  Management: 2,
+  employee: 1,
+};
+
+function getRoleLevel(role: string): number {
+  return roleHierarchy[role] || 0;
+}
+
+function canAssignRole(creatorRole: string | null, targetRole: string): boolean {
+  if (!creatorRole) return targetRole === 'employee';
+  return getRoleLevel(creatorRole) > getRoleLevel(targetRole);
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { employees } = await request.json();
+    const { employees, creatorEmail } = await request.json();
+    
+    // Get creator's role if creatorEmail is provided
+    let creatorRole: string | null = null;
+    if (creatorEmail) {
+      const creator = await prisma.user.findUnique({
+        where: { email: creatorEmail },
+        select: { role: true },
+      });
+      creatorRole = creator ? (creator.role as string) : null;
+    }
 
     if (!Array.isArray(employees) || employees.length === 0) {
       return NextResponse.json(
@@ -56,9 +85,28 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Determine and validate role
+      let assignedRole = employee.role || 'employee';
+      
+      // Validate role is allowed
+      const allowedRoles = ['Admin', 'HR_Staff', 'Management', 'employee'];
+      if (!allowedRoles.includes(assignedRole)) {
+        assignedRole = 'employee';
+      }
+
+      // Check if creator can assign the requested role
+      if (employee.role && creatorRole && !canAssignRole(creatorRole, assignedRole)) {
+        errors.push({ 
+          index: i, 
+          error: `You don't have permission to assign the role: ${assignedRole}` 
+        });
+        continue;
+      }
+
       employeesToCreate.push({
         ...employee,
         password,
+        role: assignedRole,
       });
     }
 
@@ -99,6 +147,7 @@ export async function POST(request: NextRequest) {
             address: employee.address || null,
             startDate: parsedStartDate,
             position: employee.position || null,
+            role: (employee.role || 'employee') as any, // Type assertion for Prisma enum
           },
         });
 

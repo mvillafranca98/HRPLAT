@@ -3,17 +3,21 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { getRoleDisplayName } from '@/lib/roles';
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Get user email from localStorage
+  // Get user email and role from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const email = localStorage.getItem('userEmail');
+      const role = localStorage.getItem('userRole');
       setUserEmail(email);
+      setUserRole(role);
     }
   }, []);
 
@@ -22,6 +26,7 @@ export default function Navbar() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('userEmail');
       localStorage.removeItem('userName');
+      localStorage.removeItem('userRole');
     }
     // Redirect to login
     router.push('/');
@@ -83,12 +88,17 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Right side - User email and logout */}
+          {/* Right side - User email, role and logout */}
           <div className="flex items-center space-x-4">
             {userEmail && (
-              <span className="text-sm text-gray-700 hidden sm:block">
-                {userEmail}
-              </span>
+              <div className="hidden sm:block text-right">
+                <span className="text-sm text-gray-700 block">{userEmail}</span>
+                {userRole && (
+                  <span className="text-xs text-gray-500">
+                    {getRoleDisplayName(userRole)}
+                  </span>
+                )}
+              </div>
             )}
             <button
               onClick={handleLogout}
@@ -137,6 +147,11 @@ export default function Navbar() {
         {userEmail && (
           <div className="pt-4 pb-3 border-t border-gray-200 px-4">
             <div className="text-sm text-gray-700">{userEmail}</div>
+            {userRole && (
+              <div className="text-xs text-gray-500 mt-1">
+                {getRoleDisplayName(userRole)}
+              </div>
+            )}
           </div>
         )}
       </div>

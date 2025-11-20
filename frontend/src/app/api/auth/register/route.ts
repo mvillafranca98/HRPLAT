@@ -1,10 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+
+// Role hierarchy levels
+const roleHierarchy: Record<string, number> = {
+  Admin: 4,
+  HR_Staff: 3,
+  Management: 2,
+  employee: 1,
+};
+
+function getRoleLevel(role: string): number {
+  return roleHierarchy[role] || 0;
+}
+
+function canAssignRole(creatorRole: string | null, targetRole: string): boolean {
+  if (!creatorRole) return targetRole === 'employee'; // Default users can only create employees
+  return getRoleLevel(creatorRole) > getRoleLevel(targetRole);
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, dni, rtn, phoneNumber, address, startDate, position } = await request.json();
+    const { 
+      email, 
+      password, 
+      name, 
+      dni, 
+      rtn, 
+      phoneNumber, 
+      address, 
+      startDate, 
+      position,
+      role,
+      creatorEmail // Email of the user creating this account
+    } = await request.json();
 
     // Validation
     if (!email || !password) {
@@ -19,6 +49,44 @@ export async function POST(request: NextRequest) {
         { error: 'Password must be at least 6 characters' },
         { status: 400 }
       );
+    }
+
+    // Determine the role to assign
+    let assignedRole = role || 'employee';
+    
+    // If creatorEmail is provided, validate role assignment permissions
+    if (creatorEmail) {
+      const creator = await prisma.user.findUnique({
+        where: { email: creatorEmail },
+        select: { role: true },
+      });
+
+      if (creator) {
+        const creatorRole = creator.role as string;
+        // Check if creator can assign the requested role
+        if (role && !canAssignRole(creatorRole, role)) {
+          return NextResponse.json(
+            { error: `You don't have permission to assign the role: ${role}` },
+            { status: 403 }
+          );
+        }
+        // If no role specified, default to employee (creator can always assign this)
+        if (!role) {
+          assignedRole = 'employee';
+        }
+      } else {
+        // Creator not found, default to employee
+        assignedRole = 'employee';
+      }
+    } else {
+      // No creator, default to employee (public registration)
+      assignedRole = 'employee';
+    }
+
+    // Validate role is one of the allowed values
+    const allowedRoles = ['Admin', 'HR_Staff', 'Management', 'employee'];
+    if (!allowedRoles.includes(assignedRole)) {
+      assignedRole = 'employee';
     }
 
     // Check if user already exists
@@ -51,6 +119,7 @@ export async function POST(request: NextRequest) {
         address: address || null,
         startDate: parsedStartDate,
         position: position || null,
+        role: assignedRole as any, // Type assertion for Prisma enum
       },
     });
 
@@ -64,10 +133,21 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Registration error:', error);
+    
+    // Handle Prisma unique constraint error
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return NextResponse.json(
+          { error: 'User with this email already exists' },
+          { status: 409 }
+        );
+      }
+    }
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
   }

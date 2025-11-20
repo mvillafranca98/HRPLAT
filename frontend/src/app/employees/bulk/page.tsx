@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Role, getAssignableRoles, getRoleDisplayName } from '@/lib/roles';
 
 interface EmployeeFormData {
   email: string;
@@ -14,6 +15,7 @@ interface EmployeeFormData {
   address: string;
   startDate: string;
   position: string;
+  role: Role;
 }
 
 export default function BulkAddEmployeesPage() {
@@ -29,6 +31,7 @@ export default function BulkAddEmployeesPage() {
       address: '',
       startDate: '',
       position: '',
+      role: Role.employee,
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +44,14 @@ export default function BulkAddEmployeesPage() {
     failed: number;
     errors?: Array<{ index: number; error: string }>;
   } | null>(null);
+  const [assignableRoles, setAssignableRoles] = useState<Role[]>([Role.employee]);
+
+  useEffect(() => {
+    // Get current user's role and determine assignable roles
+    const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+    const assignable = getAssignableRoles(currentUserRole);
+    setAssignableRoles(assignable);
+  }, []);
 
   const addEmployeeRow = () => {
     setEmployees([
@@ -55,6 +66,7 @@ export default function BulkAddEmployeesPage() {
         address: '',
         startDate: '',
         position: '',
+        role: Role.employee,
       },
     ]);
   };
@@ -65,7 +77,7 @@ export default function BulkAddEmployeesPage() {
     }
   };
 
-  const updateEmployee = (index: number, field: keyof EmployeeFormData, value: string) => {
+  const updateEmployee = (index: number, field: keyof EmployeeFormData, value: string | Role) => {
     const updated = [...employees];
     updated[index] = { ...updated[index], [field]: value };
     setEmployees(updated);
@@ -86,7 +98,7 @@ export default function BulkAddEmployeesPage() {
     );
 
     if (missingHeaders.length > 0) {
-      throw new Error(`Missing required columns: ${missingHeaders.join(', ')}. Required columns: ${requiredHeaders.join(', ')}, password (optional)`);
+      throw new Error(`Missing required columns: ${missingHeaders.join(', ')}. Required columns: ${requiredHeaders.join(', ')}, role (optional), password (optional)`);
     }
 
     const parsed: EmployeeFormData[] = [];
@@ -104,7 +116,19 @@ export default function BulkAddEmployeesPage() {
         else if (header.includes('phone') || header.includes('telefono')) employee.phoneNumber = value;
         else if (header.includes('address') || header.includes('direccion')) employee.address = value;
         else if (header.includes('start') || header.includes('fecha')) employee.startDate = value;
-        else if (header.includes('position') || header.includes('cargo') || header.includes('puesto')) employee.position = value;
+        else if (header.includes('position') || header.includes('cargo') || header.includes('puesto')) {
+          // Skip if it's role, handle separately
+          if (!header.includes('rol')) employee.position = value;
+        }
+        else if (header.includes('role') || header.includes('rol')) {
+          // Validate role
+          const validRoles = Object.values(Role);
+          if (validRoles.includes(value as Role)) {
+            employee.role = value as Role;
+          } else {
+            employee.role = Role.employee; // Default to employee if invalid
+          }
+        }
         else if (header.includes('password') || header.includes('contraseña')) employee.password = value;
       });
 
@@ -123,6 +147,7 @@ export default function BulkAddEmployeesPage() {
         address: employee.address || '',
         startDate: employee.startDate || '',
         position: employee.position || '',
+        role: (employee.role as Role) || Role.employee,
       });
     }
 
@@ -176,10 +201,15 @@ export default function BulkAddEmployeesPage() {
     }
 
     try {
+      const creatorEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch('/api/employees/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employees: validEmployees }),
+        body: JSON.stringify({ 
+          employees: validEmployees,
+          creatorEmail: creatorEmail,
+        }),
       });
 
       const data = await response.json();
@@ -216,9 +246,9 @@ export default function BulkAddEmployeesPage() {
   };
 
   const downloadTemplate = () => {
-    const template = `email,name,dni,rtn,phonenumber,address,startdate,position,password
-juan.perez@example.com,Juan Pérez,0801-1990-12345,08011990123456,+504 9999-9999,Colonia Las Flores,2024-01-15,Gerente de Recursos Humanos, *******
-maria.garcia@example.com,Maria García,0801-1992-54321,08011992543210,+504 8888-8888,Barrio El Centro,2024-02-01,Desarrollador, *******`; // la contraseña se auto-genera si no se proporciona
+    const template = `email,name,dni,rtn,phonenumber,address,startdate,position,role,password
+juan.perez@example.com,Juan Pérez,0801-1990-12345,08011990123456,504 9999-9999,Colonia Las Flores,2024-01-15,Gerente de Recursos Humanos,employee, *******
+maria.garcia@example.com,Maria García,0801-1992-54321,08011992543210,504 8888-8888,Barrio El Centro,2024-02-01,Desarrollador,employee, *******`; // la contraseña se auto-genera si no se proporciona. Roles: Admin, HR_Staff, Management, employee
 
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -393,6 +423,9 @@ maria.garcia@example.com,Maria García,0801-1992-54321,08011992543210,+504 8888-
                           Cargo/Puesto
                         </th>
                         <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Rol
+                        </th>
+                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Contraseña
                         </th>
                         <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -474,6 +507,19 @@ maria.garcia@example.com,Maria García,0801-1992-54321,08011992543210,+504 8888-
                               className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Cargo/Puesto"
                             />
+                          </td>
+                          <td className="px-2 py-2">
+                            <select
+                              value={employee.role}
+                              onChange={(e) => updateEmployee(index, 'role', e.target.value as Role)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            >
+                              {assignableRoles.map((r) => (
+                                <option key={r} value={r}>
+                                  {getRoleDisplayName(r)}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-2 py-2">
                             <input

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Role, getAssignableRoles, getRoleDisplayName } from '@/lib/roles';
 
 function RegisterForm() {
   const [name, setName] = useState('');
@@ -17,6 +18,9 @@ function RegisterForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isFromDashboard, setIsFromDashboard] = useState(false);
+  const [role, setRole] = useState<Role>(Role.employee);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [assignableRoles, setAssignableRoles] = useState<Role[]>([Role.employee]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [position, setPosition] = useState('');
@@ -28,6 +32,18 @@ function RegisterForm() {
     
     if (fromDashboard || isLoggedIn) {
       setIsFromDashboard(true);
+      // Get current user's role from localStorage
+      const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+      setUserRole(currentUserRole);
+      
+      // Get roles that can be assigned based on current user's role
+      const assignable = getAssignableRoles(currentUserRole);
+      setAssignableRoles(assignable);
+      
+      // Set default role to the highest assignable role (or employee if none)
+      if (assignable.length > 0) {
+        setRole(assignable[assignable.length - 1]); // Highest role user can assign
+      }
     }
   }, [searchParams]);
 
@@ -50,6 +66,8 @@ function RegisterForm() {
     }
 
     try {
+      const creatorEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,6 +81,8 @@ function RegisterForm() {
           address,
           startDate: startDate || null,
           position,
+          role: isFromDashboard ? role : Role.employee,
+          creatorEmail: isFromDashboard ? creatorEmail : null,
         }),
       });
 
@@ -257,20 +277,45 @@ function RegisterForm() {
             </div>
 
             <div>
-            <label htmlFor="position" className="block text-sm font-medium text-gray-700">
-              Cargo/Puesto *
-            </label>
-            <input
-              id="position"
-              name="position"
-              type="text"
-              required
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador, etc."
-            />
-          </div>
+              <label htmlFor="position" className="block text-sm font-medium text-gray-700">
+                Cargo/Puesto *
+              </label>
+              <input
+                id="position"
+                name="position"
+                type="text"
+                required
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador, etc."
+              />
+            </div>
+
+            {isFromDashboard && assignableRoles.length > 0 && (
+              <div>
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                  Rol/Cargo *
+                </label>
+                <select
+                  id="role"
+                  name="role"
+                  required
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Role)}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-white"
+                >
+                  {assignableRoles.map((r) => (
+                    <option key={r} value={r}>
+                      {getRoleDisplayName(r)}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Tu rol actual: {userRole ? getRoleDisplayName(userRole) : 'No disponible'}
+                </p>
+              </div>
+            )}
           </div>
 
           <div>
