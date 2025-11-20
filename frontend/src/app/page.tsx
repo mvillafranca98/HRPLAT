@@ -25,6 +25,14 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        // Store user email in localStorage for navbar display
+        if (data.user?.email && typeof window !== 'undefined') {
+          localStorage.setItem('userEmail', data.user.email);
+          if (data.user?.name) {
+            localStorage.setItem('userName', data.user.name);
+          }
+        }
         router.push('/dashboard');
       } else {
         setError('Invalid email or password');
