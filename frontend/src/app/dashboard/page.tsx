@@ -64,6 +64,22 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500 truncate">Registrar nuevo empleado</p>
               </div>
             </Link>
+
+            <Link
+              href="/employees/bulk"
+              className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
+            >
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="absolute inset-0" aria-hidden="true" />
+                <p className="text-sm font-medium text-gray-900">Agregar en Masa</p>
+                <p className="text-sm text-gray-500 truncate">Agregar múltiples empleados</p>
+              </div>
+            </Link>
           </div>
         </div>
       </div>

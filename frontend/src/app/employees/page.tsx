@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 interface Employee {
@@ -15,14 +16,24 @@ interface Employee {
   email: string;
 }
 
-export default function EmployeesPage() {
+function EmployeesList() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+    
+    // Check if bulk add was successful
+    if (searchParams.get('bulkSuccess') === 'true') {
+      setShowSuccess(true);
+      router.replace('/employees', { scroll: false });
+      setTimeout(() => setShowSuccess(false), 5000);
+    }
+  }, [searchParams, router]);
 
   const fetchEmployees = async () => {
     try {
@@ -71,13 +82,27 @@ export default function EmployeesPage() {
                 Administración de recursos humanos
               </p>
             </div>
-            <Link
-              href="/register?from=dashboard"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Agregar Empleado
-            </Link>
+            <div className="flex space-x-3">
+              <Link
+                href="/employees/bulk"
+                className="inline-flex items-center px-4 py-2 border border-indigo-600 text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Agregar en Masa
+              </Link>
+              <Link
+                href="/register?from=dashboard"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Agregar Empleado
+              </Link>
+            </div>
           </div>
+
+          {showSuccess && (
+            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+              ¡Empleados agregados exitosamente!
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -186,6 +211,21 @@ export default function EmployeesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function EmployeesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <EmployeesList />
+    </Suspense>
   );
 }
 
