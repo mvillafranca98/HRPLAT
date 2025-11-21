@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { canAccessContracts } from '@/lib/contractAccess';
+import { canAccessContracts, canViewAllContracts } from '@/lib/contractAccess';
 
 interface Contract {
   id: string;
@@ -59,9 +59,12 @@ function ContractsList() {
 
   const fetchContracts = async (role: string | null) => {
     try {
+      const userEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch('/api/contracts', {
         headers: {
           'x-user-role': role || '',
+          'x-user-email': userEmail || '',
         },
       });
       
@@ -129,7 +132,7 @@ function ContractsList() {
             <div className="bg-white shadow rounded-lg p-8 text-center">
               <h1 className="text-2xl font-bold text-gray-900 mb-4">Acceso Denegado</h1>
               <p className="text-gray-600 mb-6">
-                Solo los administradores y el personal de RRHH pueden ver los contratos.
+                No tienes permiso para ver contratos.
               </p>
               <Link
                 href="/dashboard"
@@ -150,19 +153,25 @@ function ContractsList() {
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-6 flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Contratos de Empleados</h1>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {canViewAllContracts(userRole) ? 'Contratos de Empleados' : 'Mi Contrato'}
+              </h1>
               <p className="mt-1 text-sm text-gray-600">
-                Gestión de contratos y salarios
+                {canViewAllContracts(userRole) 
+                  ? 'Gestión de contratos y salarios'
+                  : 'Información de tu contrato'}
               </p>
             </div>
-            <div className="flex space-x-3">
-              <Link
-                href="/contracts/new"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                + Nuevo Contrato
-              </Link>
-            </div>
+            {canViewAllContracts(userRole) && (
+              <div className="flex space-x-3">
+                <Link
+                  href="/contracts/new"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  + Nuevo Contrato
+                </Link>
+              </div>
+            )}
           </div>
 
           {showSuccess && (
@@ -181,13 +190,19 @@ function ContractsList() {
 
           {contracts.length === 0 ? (
             <div className="bg-white shadow rounded-lg p-8 text-center">
-              <p className="text-gray-500 mb-4">No hay contratos registrados aún.</p>
-              <Link
-                href="/contracts/new"
-                className="inline-flex items-center text-indigo-600 hover:text-indigo-500"
-              >
-                Crear el primer contrato →
-              </Link>
+              <p className="text-gray-500 mb-4">
+                {canViewAllContracts(userRole) 
+                  ? 'No hay contratos registrados aún.'
+                  : 'No tienes un contrato registrado.'}
+              </p>
+              {canViewAllContracts(userRole) && (
+                <Link
+                  href="/contracts/new"
+                  className="inline-flex items-center text-indigo-600 hover:text-indigo-500"
+                >
+                  Crear el primer contrato →
+                </Link>
+              )}
             </div>
           ) : (
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
@@ -195,9 +210,11 @@ function ContractsList() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Empleado
-                      </th>
+                      {canViewAllContracts(userRole) && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Empleado
+                        </th>
+                      )}
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cargo
                       </th>
@@ -216,22 +233,26 @@ function ContractsList() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Estado
                       </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Acciones
-                      </th>
+                      {canViewAllContracts(userRole) && (
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Acciones
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {contracts.map((contract) => (
                       <tr key={contract.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {contract.user.name || 'N/A'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {contract.user.email}
-                          </div>
-                        </td>
+                        {canViewAllContracts(userRole) && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {contract.user.name || 'N/A'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {contract.user.email}
+                            </div>
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {contract.user.position || 'N/A'}
                         </td>
@@ -252,14 +273,16 @@ function ContractsList() {
                             {contract.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Link
-                            href={`/contracts/${contract.id}/edit`}
-                            className="text-indigo-600 hover:text-indigo-900 mr-4"
-                          >
-                            Editar
-                          </Link>
-                        </td>
+                        {canViewAllContracts(userRole) && (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <Link
+                              href={`/contracts/${contract.id}/edit`}
+                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                            >
+                              Editar
+                            </Link>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

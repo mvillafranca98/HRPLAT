@@ -16,6 +16,14 @@ export async function GET() {
         position: true,
         email: true,
         role: true,
+        reportsToId: true,
+        reportsTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
         createdAt: true,
       },
       orderBy: {

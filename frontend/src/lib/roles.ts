@@ -51,6 +51,20 @@ export function canManageUser(managerRole: Role | string | null, targetRole: Rol
   return getRoleLevel(managerRole) > getRoleLevel(targetRole);
 }
 
+// Check if a user can edit another user (can edit themselves or users lower in hierarchy)
+export function canEditUser(editorRole: Role | string | null, editorId: string, targetRole: Role | string, targetId: string): boolean {
+  if (!editorRole) return false;
+  
+  // Users can always edit themselves
+  if (editorId === targetId) return true;
+  
+  // Admin can edit anyone
+  if (editorRole === Role.Admin || editorRole === 'Admin') return true;
+  
+  // Otherwise, editor must have higher role level than target
+  return getRoleLevel(editorRole) > getRoleLevel(targetRole);
+}
+
 // Get role display name
 export function getRoleDisplayName(role: Role | string): string {
   const displayNames: Record<Role, string> = {

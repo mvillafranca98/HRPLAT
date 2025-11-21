@@ -27,21 +27,31 @@ export default function LoginPage() {
       if (response.ok) {
         const data = await response.json();
         // Store user data in localStorage for navbar display and role-based access
-        if (data.user?.email && typeof window !== 'undefined') {
-          localStorage.setItem('userEmail', data.user.email);
-          if (data.user?.name) {
+        if (data.user && typeof window !== 'undefined') {
+          // Clear any old data first
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('userName');
+          localStorage.removeItem('userRole');
+          
+          // Store new user data
+          if (data.user.email) {
+            localStorage.setItem('userEmail', data.user.email);
+          }
+          if (data.user.name) {
             localStorage.setItem('userName', data.user.name);
           }
-          if (data.user?.role) {
+          if (data.user.role) {
             localStorage.setItem('userRole', data.user.role);
           }
         }
         
         // Check if password change is required
-        if (data.mustChangePassword) {
+        if (data.user?.mustChangePassword || data.mustChangePassword) {
           router.push('/change-password');
+          router.refresh(); // Force refresh to update navbar
         } else {
           router.push('/dashboard');
+          router.refresh(); // Force refresh to update navbar
         }
       } else {
         setError('Contraseño o correo electrónico incorrectos');

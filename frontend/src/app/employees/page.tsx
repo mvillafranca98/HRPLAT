@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getRoleDisplayName } from '@/lib/roles';
+import { getRoleDisplayName, canEditUser, getRoleLevel } from '@/lib/roles';
 
 interface Employee {
   id: string;
@@ -16,6 +16,12 @@ interface Employee {
   position: string | null;
   email: string;
   role: string;
+  reportsToId: string | null;
+  reportsTo: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
 }
 
 function EmployeesList() {
@@ -23,10 +29,21 @@ function EmployeesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
+    // Get current user info
+    if (typeof window !== 'undefined') {
+      const role = localStorage.getItem('userRole');
+      const email = localStorage.getItem('userEmail');
+      setUserRole(role);
+      setUserEmail(email);
+    }
+    
     fetchEmployees();
     
     // Check if bulk add was successful
@@ -35,6 +52,7 @@ function EmployeesList() {
       router.replace('/employees', { scroll: false });
       setTimeout(() => setShowSuccess(false), 5000);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, router]);
 
   const fetchEmployees = async () => {
@@ -43,6 +61,15 @@ function EmployeesList() {
       if (response.ok) {
         const data = await response.json();
         setEmployees(data);
+        
+        // Find current user's ID using email from localStorage (more reliable)
+        const currentUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        if (currentUserEmail) {
+          const currentUser = data.find((e: Employee) => e.email === currentUserEmail);
+          if (currentUser) {
+            setUserId(currentUser.id);
+          }
+        }
       } else {
         setError('Error al cargar los empleados');
       }
@@ -51,6 +78,37 @@ function EmployeesList() {
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Check if current user can edit an employee
+  const canEditEmployee = (employee: Employee): boolean => {
+    // Get current role from state or localStorage as fallback
+    const currentRole = userRole || (typeof window !== 'undefined' ? localStorage.getItem('userRole') : null);
+    
+    if (!currentRole) return false;
+    
+    // Admin can edit anyone - check this first so we don't need userId
+    if (currentRole === 'Admin') return true;
+    
+    // Get current userId from state or find it from employees list
+    const currentId = userId || (() => {
+      if (typeof window !== 'undefined' && employees.length > 0) {
+        const currentEmail = localStorage.getItem('userEmail');
+        if (currentEmail) {
+          const currentUser = employees.find((e: Employee) => e.email === currentEmail);
+          return currentUser?.id || null;
+        }
+      }
+      return null;
+    })();
+    
+    // Users can always edit themselves
+    if (currentId && currentId === employee.id) return true;
+    
+    // Otherwise, check if user has higher role level
+    const userLevel = getRoleLevel(currentRole);
+    const employeeLevel = getRoleLevel(employee.role);
+    return userLevel > employeeLevel;
   };
 
   const formatDate = (date: Date | null) => {
@@ -155,6 +213,9 @@ function EmployeesList() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Rol
                       </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Manager
+                      </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Acciones
                       </th>
@@ -192,13 +253,31 @@ function EmployeesList() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {employee.role ? getRoleDisplayName(employee.role) : 'N/A'}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {employee.reportsTo ? (
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {employee.reportsTo.name || 'N/A'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {employee.reportsTo.email}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Sin manager</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Link
-                            href={`/employees/${employee.id}/edit`}
-                            className="text-indigo-600 hover:text-indigo-900 mr-4"
-                          >
-                            Editar
-                          </Link>
+                          {canEditEmployee(employee) ? (
+                            <Link
+                              href={`/employees/${employee.id}/edit`}
+                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                            >
+                              Editar
+                            </Link>
+                          ) : (
+                            <span className="text-gray-400">Sin permiso</span>
+                          )}
                         </td>
                       </tr>
                     ))}

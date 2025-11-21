@@ -9,11 +9,12 @@ export async function GET(
   try {
     const { id } = await params;
     
-    // Get user role from request headers
+    // Get user role and email from request headers
     const userRole = request.headers.get('x-user-role');
+    const userEmail = request.headers.get('x-user-email');
     
-    // Check if user has access (only Admin and HR_Staff)
-    if (userRole !== 'Admin' && userRole !== 'HR_Staff') {
+    // Check if user has access
+    if (userRole !== 'Admin' && userRole !== 'HR_Staff' && userRole !== 'employee') {
       return NextResponse.json(
         { error: 'No tienes permiso para ver contratos' },
         { status: 403 }
@@ -42,6 +43,28 @@ export async function GET(
       );
     }
 
+    // If employee, verify they can only see their own contract
+    if (userRole === 'employee') {
+      if (!userEmail) {
+        return NextResponse.json(
+          { error: 'Email de usuario requerido' },
+          { status: 400 }
+        );
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true },
+      });
+
+      if (!user || contract.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'No tienes permiso para ver este contrato' },
+          { status: 403 }
+        );
+      }
+    }
+
     return NextResponse.json(contract);
   } catch (error) {
     console.error('Error fetching contract:', error);
@@ -63,7 +86,7 @@ export async function PUT(
     // Get user role from request headers
     const userRole = request.headers.get('x-user-role');
     
-    // Check if user has access (only Admin and HR_Staff)
+    // Check if user has access (only Admin and HR_Staff can edit)
     if (userRole !== 'Admin' && userRole !== 'HR_Staff') {
       return NextResponse.json(
         { error: 'No tienes permiso para editar contratos' },
@@ -136,7 +159,7 @@ export async function DELETE(
     // Get user role from request headers
     const userRole = request.headers.get('x-user-role');
     
-    // Check if user has access (only Admin and HR_Staff)
+    // Check if user has access (only Admin and HR_Staff can delete)
     if (userRole !== 'Admin' && userRole !== 'HR_Staff') {
       return NextResponse.json(
         { error: 'No tienes permiso para eliminar contratos' },

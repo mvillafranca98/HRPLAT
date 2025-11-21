@@ -4,18 +4,63 @@ import { prisma } from '@/lib/prisma';
 // GET all contracts (with role-based access)
 export async function GET(request: NextRequest) {
   try {
-    // Get user role from request headers (we'll pass it from frontend)
+    // Get user role and email from request headers
     const userRole = request.headers.get('x-user-role');
+    const userEmail = request.headers.get('x-user-email');
     
-    // Check if user has access (only Admin and HR_Staff)
-    if (userRole !== 'Admin' && userRole !== 'HR_Staff') {
+    // Check if user has access
+    if (userRole !== 'Admin' && userRole !== 'HR_Staff' && userRole !== 'employee') {
       return NextResponse.json(
         { error: 'No tienes permiso para ver contratos' },
         { status: 403 }
       );
     }
 
-    // Get all contracts with user information
+    // If employee, only get their own contract
+    if (userRole === 'employee') {
+      if (!userEmail) {
+        return NextResponse.json(
+          { error: 'Email de usuario requerido' },
+          { status: 400 }
+        );
+      }
+
+      // Find user by email
+      const user = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true },
+      });
+
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Usuario no encontrado' },
+          { status: 404 }
+        );
+      }
+
+      // Get only this user's contracts
+      const contracts = await prisma.contract.findMany({
+        where: { userId: user.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              position: true,
+              startDate: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return NextResponse.json(contracts);
+    }
+
+    // Admin and HR_Staff can see all contracts
     const contracts = await prisma.contract.findMany({
       include: {
         user: {

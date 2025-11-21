@@ -14,13 +14,27 @@ export default function Navbar() {
 
   // Get user email and role from localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const email = localStorage.getItem('userEmail');
-      const role = localStorage.getItem('userRole');
-      setUserEmail(email);
-      setUserRole(role);
-    }
-  }, []);
+    const updateUserData = () => {
+      if (typeof window !== 'undefined') {
+        const email = localStorage.getItem('userEmail');
+        const role = localStorage.getItem('userRole');
+        setUserEmail(email);
+        setUserRole(role);
+      }
+    };
+
+    // Initial load and on pathname change (when navigating after login)
+    updateUserData();
+
+    // Listen for storage changes (e.g., when user logs in on another tab)
+    // Note: 'storage' event only fires for changes from other tabs/windows
+    // For same-tab changes, we rely on pathname dependency
+    window.addEventListener('storage', updateUserData);
+
+    return () => {
+      window.removeEventListener('storage', updateUserData);
+    };
+  }, [pathname]);
 
   const handleLogout = () => {
     // Clear stored user data

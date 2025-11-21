@@ -1,5 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getRoleLevel } from '@/lib/roles';
+
+// Helper function to check for circular references in reporting hierarchy
+async function checkCircularReference(userId: string, managerId: string): Promise<boolean> {
+  let currentId = managerId;
+  const visited = new Set<string>([userId]);
+  
+  // Follow the chain of reportsTo up to 10 levels to detect cycles
+  for (let i = 0; i < 10; i++) {
+    if (currentId === userId) {
+      return true; // Circular reference detected
+    }
+    
+    const user = await prisma.user.findUnique({
+      where: { id: currentId },
+      select: { reportsToId: true },
+    });
+    
+    if (!user || !user.reportsToId) {
+      return false; // No cycle found
+    }
+    
+    if (visited.has(user.reportsToId)) {
+      return true; // Cycle detected
+    }
+    
+    visited.add(user.reportsToId);
+    currentId = user.reportsToId;
+  }
+  
+  return false; // No cycle found within reasonable depth
+}
 
 // GET single employee
 export async function GET(
@@ -8,6 +40,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    
+    // Get current user info from headers
+    const userEmail = request.headers.get('x-user-email');
+    const userRole = request.headers.get('x-user-role');
 
     const employee = await prisma.user.findUnique({
       where: { id },
@@ -22,6 +58,14 @@ export async function GET(
         startDate: true,
         position: true,
         role: true,
+        reportsToId: true,
+        reportsTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -30,6 +74,35 @@ export async function GET(
         { error: 'Empleado no encontrado' },
         { status: 404 }
       );
+    }
+
+    // Check permissions: employees can only view themselves, others can view if they can edit
+    if (userEmail && userRole) {
+      const currentUser = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true, role: true },
+      });
+
+      if (currentUser) {
+        // If viewing themselves, allow
+        if (currentUser.id === id) {
+          return NextResponse.json(employee);
+        }
+
+        // Otherwise, check if user can manage this employee (must have higher role)
+        // Admin can view anyone
+        if (currentUser.role !== 'Admin') {
+          const currentUserLevel = getRoleLevel(currentUser.role as string);
+          const employeeLevel = getRoleLevel(employee.role as string);
+
+          if (currentUserLevel <= employeeLevel) {
+            return NextResponse.json(
+              { error: 'No tienes permiso para ver este empleado' },
+              { status: 403 }
+            );
+          }
+        }
+      }
     }
 
     return NextResponse.json(employee);
@@ -49,7 +122,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, email, dni, rtn, phoneNumber, address, startDate, position, role, creatorEmail } = await request.json();
+    const { name, email, dni, rtn, phoneNumber, address, startDate, position, role, reportsToId, creatorEmail } = await request.json();
 
     // Validation
     if (!email) {
@@ -71,6 +144,44 @@ export async function PUT(
       );
     }
 
+    // Get current user info from headers or creatorEmail
+    const userEmail = request.headers.get('x-user-email') || creatorEmail;
+    const userRole = request.headers.get('x-user-role');
+    
+    let currentUser = null;
+    if (userEmail) {
+      currentUser = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true, role: true },
+      });
+    }
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Se requiere autenticación para editar empleados' },
+        { status: 403 }
+      );
+    }
+
+    // Check if user can edit this employee
+    // Users can always edit themselves
+    const isEditingSelf = currentUser.id === id;
+    
+    if (!isEditingSelf) {
+      // Check if current user has higher role level than target employee
+      const currentUserLevel = getRoleLevel(currentUser.role as string);
+      const targetEmployeeLevel = getRoleLevel(existingEmployee.role as string);
+
+      // Admin can edit anyone (including other Admins)
+      // Others can only edit users with lower role levels
+      if (currentUser.role !== 'Admin' && currentUserLevel <= targetEmployeeLevel) {
+        return NextResponse.json(
+          { error: 'No tienes permiso para editar empleados con este rol' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if email is being changed and if new email already exists
     if (email !== existingEmployee.email) {
       const emailExists = await prisma.user.findUnique({
@@ -83,18 +194,6 @@ export async function PUT(
           { status: 409 }
         );
       }
-    }
-
-    // Role hierarchy levels
-    const roleHierarchy: Record<string, number> = {
-      Admin: 4,
-      HR_Staff: 3,
-      Management: 2,
-      employee: 1,
-    };
-
-    function getRoleLevel(role: string): number {
-      return roleHierarchy[role] || 0;
     }
 
     function canAssignRole(creatorRole: string | null, targetRole: string): boolean {
@@ -117,36 +216,36 @@ export async function PUT(
 
       // If role is being changed, validate permissions
       if (role !== existingEmployee.role) {
-        if (creatorEmail) {
-          const creator = await prisma.user.findUnique({
-            where: { email: creatorEmail },
-            select: { role: true },
-          });
-
-          if (creator) {
-            const creatorRole = creator.role as string;
-            // Check if creator can assign the requested role
-            if (!canAssignRole(creatorRole, role)) {
-              return NextResponse.json(
-                { error: `No tienes permiso para asignar el rol: ${role}` },
-                { status: 403 }
-              );
-            }
-            // Check if creator can manage this employee (must have higher role)
+        // Users cannot change their own role (security measure)
+        if (isEditingSelf) {
+          return NextResponse.json(
+            { error: 'No puedes cambiar tu propio rol' },
+            { status: 403 }
+          );
+        }
+        
+        // Use currentUser we already fetched
+        if (currentUser) {
+          const creatorRole = currentUser.role as string;
+          // Check if creator can assign the requested role
+          if (!canAssignRole(creatorRole, role)) {
+            return NextResponse.json(
+              { error: `No tienes permiso para asignar el rol: ${role}` },
+              { status: 403 }
+            );
+          }
+          // Check if creator can manage this employee (must have higher role)
+          // Admin can change roles of anyone (including other Admins)
+          if (creatorRole !== 'Admin') {
             if (getRoleLevel(creatorRole) <= getRoleLevel(existingEmployee.role as string)) {
               return NextResponse.json(
                 { error: 'No tienes permiso para modificar empleados con este rol' },
                 { status: 403 }
               );
             }
-          } else {
-            return NextResponse.json(
-              { error: 'Usuario no encontrado' },
-              { status: 403 }
-            );
           }
         } else {
-          // No creator email provided, don't allow role changes
+          // No current user found, don't allow role changes
           return NextResponse.json(
             { error: 'Se requiere autenticación para cambiar roles' },
             { status: 403 }
@@ -154,6 +253,37 @@ export async function PUT(
         }
         
         roleToAssign = role;
+      }
+    }
+
+    // Validate reportsToId - prevent self-reference and circular references
+    if (reportsToId) {
+      if (reportsToId === id) {
+        return NextResponse.json(
+          { error: 'Un usuario no puede reportarse a sí mismo' },
+          { status: 400 }
+        );
+      }
+      
+      // Check if the manager exists
+      const manager = await prisma.user.findUnique({
+        where: { id: reportsToId },
+      });
+      
+      if (!manager) {
+        return NextResponse.json(
+          { error: 'El manager especificado no existe' },
+          { status: 400 }
+        );
+      }
+      
+      // Prevent circular references (check if target user reports to current user)
+      const wouldCreateCycle = await checkCircularReference(id, reportsToId);
+      if (wouldCreateCycle) {
+        return NextResponse.json(
+          { error: 'No se puede crear una referencia circular en la jerarquía' },
+          { status: 400 }
+        );
       }
     }
 
@@ -173,6 +303,7 @@ export async function PUT(
         startDate: parsedStartDate,
         position: position || null,
         role: roleToAssign as any, // Type assertion for Prisma enum
+        reportsToId: reportsToId || null,
       },
       select: {
         id: true,
@@ -185,6 +316,14 @@ export async function PUT(
         startDate: true,
         position: true,
         role: true,
+        reportsToId: true,
+        reportsTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
         updatedAt: true,
       },
     });

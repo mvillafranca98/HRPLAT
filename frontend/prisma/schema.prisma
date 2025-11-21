@@ -29,6 +29,9 @@ model User {
   startDate         DateTime?
   position          String?
   mustChangePassword Boolean   @default(false)
+  reportsToId       String?
+  reportsTo        User?      @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
+  directReports     User[]     @relation("UserReportsTo")
   contracts         Contract[]
 }
 

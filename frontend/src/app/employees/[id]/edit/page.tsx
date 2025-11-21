@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Role, getAssignableRoles, getRoleDisplayName } from '@/lib/roles';
+import { Role, getAssignableRoles, getRoleDisplayName, canEditUser } from '@/lib/roles';
 import { canAccessContracts } from '@/lib/contractAccess';
 
 interface Employee {
@@ -17,6 +17,12 @@ interface Employee {
   startDate: Date | null;
   position: string | null;
   role: string;
+  reportsToId: string | null;
+  reportsTo: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
 }
 
 export default function EditEmployeePage() {
@@ -34,19 +40,40 @@ export default function EditEmployeePage() {
     startDate: '',
     position: '',
     role: Role.employee,
+    reportsToId: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [assignableRoles, setAssignableRoles] = useState<Role[]>([]);
   const [currentEmployeeRole, setCurrentEmployeeRole] = useState<Role | null>(null);
+  const [hasEditPermission, setHasEditPermission] = useState(false);
+  const [availableManagers, setAvailableManagers] = useState<Employee[]>([]);
+
+  const fetchAvailableManagers = async () => {
+    try {
+      const response = await fetch('/api/employees');
+      if (response.ok) {
+        const allEmployees = await response.json();
+        // Filter out the current employee (can't report to themselves)
+        const managers = allEmployees.filter((e: Employee) => e.id !== employeeId);
+        setAvailableManagers(managers);
+      }
+    } catch (err) {
+      console.error('Error fetching managers:', err);
+    }
+  };
 
   useEffect(() => {
-    // Get current user's role from localStorage
+    // Get current user's role and email from localStorage
     if (typeof window !== 'undefined') {
       const currentUserRole = localStorage.getItem('userRole');
+      const currentUserEmail = localStorage.getItem('userEmail');
       setUserRole(currentUserRole);
+      setUserEmail(currentUserEmail);
     }
     
     if (employeeId) {
@@ -62,11 +89,29 @@ export default function EditEmployeePage() {
         return;
       }
 
-      const response = await fetch(`/api/employees/${employeeId}`);
+      // Get current user info for permission check
+      const currentUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+
+      // Fetch employee with headers for permission check
+      const headers: HeadersInit = {};
+      if (currentUserEmail) headers['x-user-email'] = currentUserEmail;
+      if (currentUserRole) headers['x-user-role'] = currentUserRole;
+
+      const response = await fetch(`/api/employees/${employeeId}`, { headers });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        setError(errorData.error || 'Error al cargar la información del empleado');
+        const errorMessage = errorData.error || 'Error al cargar la información del empleado';
+        setError(errorMessage);
+        
+        // If permission denied, redirect after a moment
+        if (response.status === 403) {
+          setTimeout(() => {
+            router.push('/employees');
+          }, 2000);
+        }
+        
         setLoading(false);
         return;
       }
@@ -74,6 +119,36 @@ export default function EditEmployeePage() {
       const employee: Employee = await response.json();
       const employeeRole = (employee.role as Role) || Role.employee;
       setCurrentEmployeeRole(employeeRole);
+      
+      // Get current user's ID by fetching all employees and finding by email
+      if (currentUserEmail) {
+        try {
+          const userResponse = await fetch('/api/employees');
+          if (userResponse.ok) {
+            const allUsers = await userResponse.json();
+            const currentUser = allUsers.find((u: Employee) => u.email === currentUserEmail);
+            if (currentUser) {
+              setUserId(currentUser.id);
+              // Check if current user can edit this employee
+              if (currentUserRole) {
+                const canEdit = canEditUser(currentUserRole, currentUser.id, employeeRole, employeeId);
+                setHasEditPermission(canEdit);
+                
+                if (!canEdit) {
+                  setError('No tienes permiso para editar este empleado');
+                  setTimeout(() => {
+                    router.push('/employees');
+                  }, 2000);
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching current user:', err);
+        }
+      }
       
       setFormData({
         name: employee.name || '',
@@ -87,11 +162,16 @@ export default function EditEmployeePage() {
           : '',
         position: employee.position || '',
         role: employeeRole,
+        reportsToId: employee.reportsToId || '',
       });
       
+      // Fetch available managers (only if Admin or HR_Staff)
+      if (currentUserRole === 'Admin' || currentUserRole === 'HR_Staff') {
+        fetchAvailableManagers();
+      }
+      
       // Update assignable roles to include current employee role if not already included
-      if (typeof window !== 'undefined') {
-        const currentUserRole = localStorage.getItem('userRole');
+      if (currentUserRole) {
         const assignable = getAssignableRoles(currentUserRole);
         // Include current employee role in the list so it can be displayed
         const rolesToShow = [...new Set([...assignable, employeeRole])];
@@ -118,13 +198,26 @@ export default function EditEmployeePage() {
       }
 
       const creatorEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      const creatorRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (creatorEmail) {
+        headers['x-user-email'] = creatorEmail;
+      }
+      if (creatorRole) {
+        headers['x-user-role'] = creatorRole;
+      }
       
       const response = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           ...formData,
           startDate: formData.startDate || null,
+          reportsToId: formData.reportsToId || null,
           creatorEmail: creatorEmail,
         }),
       });
@@ -343,6 +436,32 @@ export default function EditEmployeePage() {
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
                     
+                  </p>
+                </div>
+              )}
+
+              {/* Manager/Reports To field - only visible to Admin and HR_Staff */}
+              {(userRole === 'Admin' || userRole === 'HR_Staff') && (
+                <div>
+                  <label htmlFor="reportsToId" className="block text-sm font-medium text-gray-700">
+                    Reporta a (Manager)
+                  </label>
+                  <select
+                    id="reportsToId"
+                    name="reportsToId"
+                    value={formData.reportsToId}
+                    onChange={handleChange}
+                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-white"
+                  >
+                    <option value="">Ninguno (Sin manager)</option>
+                    {availableManagers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.name || manager.email} ({getRoleDisplayName(manager.role)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Selecciona el usuario al que reporta este empleado
                   </p>
                 </div>
               )}

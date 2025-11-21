@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { canAccessContracts } from '@/lib/contractAccess';
+import { canAccessContracts, canViewAllContracts } from '@/lib/contractAccess';
 
 interface Contract {
   id: string;
@@ -44,13 +44,13 @@ export default function EditContractPage() {
   });
 
   useEffect(() => {
-    // Check user role and access
+    // Check user role and access (only Admin and HR_Staff can edit)
     if (typeof window !== 'undefined') {
       const role = localStorage.getItem('userRole');
       setUserRole(role);
-      setHasAccess(canAccessContracts(role));
+      setHasAccess(canViewAllContracts(role)); // Only Admin and HR_Staff can edit
       
-      if (canAccessContracts(role) && contractId) {
+      if (canViewAllContracts(role) && contractId) {
         fetchContract(role);
       } else {
         setLoading(false);
@@ -60,9 +60,12 @@ export default function EditContractPage() {
 
   const fetchContract = async (role: string | null) => {
     try {
+      const userEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch(`/api/contracts/${contractId}`, {
         headers: {
           'x-user-role': role || '',
+          'x-user-email': userEmail || '',
         },
       });
       
@@ -108,11 +111,14 @@ export default function EditContractPage() {
         return;
       }
 
+      const userEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch(`/api/contracts/${contractId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-user-role': userRole || '',
+          'x-user-email': userEmail || '',
         },
         body: JSON.stringify({
           salary: parseFloat(formData.salary),
@@ -160,10 +166,10 @@ export default function EditContractPage() {
                 Solo los administradores y el personal de RRHH pueden editar contratos.
               </p>
               <Link
-                href="/dashboard"
+                href="/contracts"
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
               >
-                Volver al Dashboard
+                Volver a Contratos
               </Link>
             </div>
           </div>
