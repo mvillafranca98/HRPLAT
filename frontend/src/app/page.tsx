@@ -36,7 +36,13 @@ export default function LoginPage() {
             localStorage.setItem('userRole', data.user.role);
           }
         }
-        router.push('/dashboard');
+        
+        // Check if password change is required
+        if (data.mustChangePassword) {
+          router.push('/change-password');
+        } else {
+          router.push('/dashboard');
+        }
       } else {
         setError('Contraseño o correo electrónico incorrectos');
       }

@@ -52,14 +52,21 @@ function RegisterForm() {
     setError('');
     setLoading(true);
 
-    // Client-side validation
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
-      setLoading(false);
-      return;
-    }
+    // Client-side validation (only for public registration or if password is provided)
+    if (!isFromDashboard) {
+      if (password !== confirmPassword) {
+        setError('Las contraseñas no coinciden');
+        setLoading(false);
+        return;
+      }
 
-    if (password.length < 6) {
+      if (password.length < 6) {
+        setError('La contraseña debe tener al menos 6 caracteres');
+        setLoading(false);
+        return;
+      }
+    } else if (password && password.length < 6) {
+      // If password is provided from dashboard, validate it
       setError('La contraseña debe tener al menos 6 caracteres');
       setLoading(false);
       return;
@@ -73,7 +80,7 @@ function RegisterForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email, 
-          password, 
+          password: password || undefined, // Send undefined if empty (will trigger auto-generation)
           name,
           dni,
           rtn,
@@ -91,6 +98,11 @@ function RegisterForm() {
       if (response.ok) {
         // Registration successful - redirect based on context
         if (isFromDashboard) {
+          // If password was auto-generated, show it to the user
+          if (data.temporaryPassword) {
+            const message = `¡Empleado creado exitosamente!\n\nContraseña temporal: ${data.temporaryPassword}\n\nEl empleado deberá cambiar esta contraseña al iniciar sesión por primera vez.`;
+            alert(message);
+          }
           // If coming from dashboard, go back to dashboard
           router.push('/dashboard?employeeAdded=true');
         } else {
@@ -98,7 +110,9 @@ function RegisterForm() {
           router.push('/?registered=true');
         }
       } else {
-        setError(data.error || 'Error al crear la cuenta');
+        const errorMessage = data.error || 'Error al crear la cuenta';
+        const details = data.details ? `: ${data.details}` : '';
+        setError(`${errorMessage}${details}`);
       }
     } catch (err) {
       setError('Ocurrió un error. Por favor intenta de nuevo.');
@@ -158,42 +172,74 @@ function RegisterForm() {
               />
             </div>
             
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="••••••••"
-                minLength={6}
-              />
-              <p className="mt-1 text-xs text-gray-500">Mínimo 6 caracteres</p>
-            </div>
+            {!isFromDashboard && (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Contraseña
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="••••••••"
+                  minLength={6}
+                />
+                <p className="mt-1 text-xs text-gray-500">Mínimo 6 caracteres</p>
+              </div>
+            )}
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirmar contraseña
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="••••••••"
-                minLength={6}
-              />
-            </div>
+            {isFromDashboard && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Nota:</strong> Si no proporciona una contraseña, se generará automáticamente una contraseña temporal de 6 caracteres. El empleado deberá cambiarla al iniciar sesión por primera vez.
+                </p>
+              </div>
+            )}
+
+            {isFromDashboard && (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Contraseña (Opcional)
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Dejar vacío para generar automáticamente"
+                  minLength={6}
+                />
+                <p className="mt-1 text-xs text-gray-500">Dejar vacío para generar una contraseña temporal de 6 caracteres</p>
+              </div>
+            )}
+
+            {!isFromDashboard && (
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirmar contraseña
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="••••••••"
+                  minLength={6}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
@@ -311,8 +357,7 @@ function RegisterForm() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  Tu rol actual: {userRole ? getRoleDisplayName(userRole) : 'No disponible'}
+                <p className="mt-1 text-xs text-gray-500">                
                 </p>
               </div>
             )}

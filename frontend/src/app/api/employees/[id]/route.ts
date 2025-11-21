@@ -49,7 +49,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, email, dni, rtn, phoneNumber, address, startDate, position } = await request.json();
+    const { name, email, dni, rtn, phoneNumber, address, startDate, position, role, creatorEmail } = await request.json();
 
     // Validation
     if (!email) {
@@ -85,6 +85,78 @@ export async function PUT(
       }
     }
 
+    // Role hierarchy levels
+    const roleHierarchy: Record<string, number> = {
+      Admin: 4,
+      HR_Staff: 3,
+      Management: 2,
+      employee: 1,
+    };
+
+    function getRoleLevel(role: string): number {
+      return roleHierarchy[role] || 0;
+    }
+
+    function canAssignRole(creatorRole: string | null, targetRole: string): boolean {
+      if (!creatorRole) return targetRole === 'employee';
+      return getRoleLevel(creatorRole) >= getRoleLevel(targetRole);
+    }
+
+    // Handle role update with permission validation
+    let roleToAssign = existingEmployee.role as string;
+    
+    if (role) {
+      // Validate role is one of the allowed values
+      const allowedRoles = ['Admin', 'HR_Staff', 'Management', 'employee'];
+      if (!allowedRoles.includes(role)) {
+        return NextResponse.json(
+          { error: 'Rol inválido' },
+          { status: 400 }
+        );
+      }
+
+      // If role is being changed, validate permissions
+      if (role !== existingEmployee.role) {
+        if (creatorEmail) {
+          const creator = await prisma.user.findUnique({
+            where: { email: creatorEmail },
+            select: { role: true },
+          });
+
+          if (creator) {
+            const creatorRole = creator.role as string;
+            // Check if creator can assign the requested role
+            if (!canAssignRole(creatorRole, role)) {
+              return NextResponse.json(
+                { error: `No tienes permiso para asignar el rol: ${role}` },
+                { status: 403 }
+              );
+            }
+            // Check if creator can manage this employee (must have higher role)
+            if (getRoleLevel(creatorRole) <= getRoleLevel(existingEmployee.role as string)) {
+              return NextResponse.json(
+                { error: 'No tienes permiso para modificar empleados con este rol' },
+                { status: 403 }
+              );
+            }
+          } else {
+            return NextResponse.json(
+              { error: 'Usuario no encontrado' },
+              { status: 403 }
+            );
+          }
+        } else {
+          // No creator email provided, don't allow role changes
+          return NextResponse.json(
+            { error: 'Se requiere autenticación para cambiar roles' },
+            { status: 403 }
+          );
+        }
+        
+        roleToAssign = role;
+      }
+    }
+
     // Parse startDate if provided
     const parsedStartDate = startDate ? new Date(startDate) : null;
 
@@ -100,6 +172,7 @@ export async function PUT(
         address: address || null,
         startDate: parsedStartDate,
         position: position || null,
+        role: roleToAssign as any, // Type assertion for Prisma enum
       },
       select: {
         id: true,

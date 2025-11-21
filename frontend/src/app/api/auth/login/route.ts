@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         message: 'Login successful', 
-        user: userWithoutPassword 
+        user: userWithoutPassword,
+        mustChangePassword: user.mustChangePassword || false,
       },
       { status: 200 }
     );

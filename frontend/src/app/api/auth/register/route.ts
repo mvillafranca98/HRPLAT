@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { generateRandomPassword } from '@/lib/passwordGenerator';
 
 // Role hierarchy levels
 const roleHierarchy: Record<string, number> = {
@@ -37,14 +38,37 @@ export async function POST(request: NextRequest) {
     } = await request.json();
 
     // Validation
-    if (!email || !password) {
+    if (!email) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'Email is required' },
         { status: 400 }
       );
     }
 
-    if (password.length < 6) {
+    // Determine if this is an employee creation (has creatorEmail) or public registration
+    const isEmployeeCreation = !!creatorEmail;
+    
+    // Generate password if not provided (for employee creation)
+    let finalPassword: string;
+    let mustChangePassword = false;
+    
+    // Handle password: if empty string, undefined, or null, treat as not provided
+    const hasPassword = password && typeof password === 'string' && password.trim() !== '';
+    
+    if (!hasPassword && isEmployeeCreation) {
+      // Generate a 6-character random password for new employees
+      finalPassword = generateRandomPassword(6);
+      mustChangePassword = true;
+    } else if (!hasPassword) {
+      return NextResponse.json(
+        { error: 'Password is required' },
+        { status: 400 }
+      );
+    } else {
+      finalPassword = password.trim();
+    }
+
+    if (finalPassword.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters' },
         { status: 400 }
@@ -102,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash the password using bcrypt (10 rounds is a good default)
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(finalPassword, 10);
 
     // Parse startDate if provided
     const parsedStartDate = startDate ? new Date(startDate) : null;
@@ -120,21 +144,28 @@ export async function POST(request: NextRequest) {
         startDate: parsedStartDate,
         position: position || null,
         role: assignedRole as any, // Type assertion for Prisma enum
+        mustChangePassword: mustChangePassword,
       },
     });
 
     // Return user data without password
     const { password: _, ...userWithoutPassword } = user;
 
-    return NextResponse.json(
-      { 
-        message: 'Account created successfully', 
-        user: userWithoutPassword 
-      },
-      { status: 201 }
-    );
+    // If password was auto-generated, return it in the response (only for employee creation)
+    const response: any = {
+      message: 'Account created successfully',
+      user: userWithoutPassword,
+    };
+
+    if (mustChangePassword && isEmployeeCreation) {
+      response.temporaryPassword = finalPassword; // Return the plain password so it can be shared with the employee
+    }
+
+    return NextResponse.json(response, { status: 201 });
   } catch (error: any) {
     console.error('Registration error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     
     // Handle Prisma unique constraint error
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -147,7 +178,11 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { 
+        error: 'Internal server error', 
+        details: error.message || 'Unknown error',
+        code: error.code,
+      },
       { status: 500 }
     );
   }

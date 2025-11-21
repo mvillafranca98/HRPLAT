@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { generateRandomPassword } from '@/lib/passwordGenerator';
 
 interface BulkEmployee {
   email: string;
@@ -67,8 +68,14 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Generate a default password if not provided
-      const password = employee.password || `TempPass${Math.random().toString(36).slice(-8)}`;
+      // Generate a 6-character random password if not provided
+      let password = employee.password;
+      let mustChangePassword = false;
+      
+      if (!password || password.trim() === '') {
+        password = generateRandomPassword(6);
+        mustChangePassword = true;
+      }
 
       if (password.length < 6) {
         errors.push({ index: i, error: 'Password must be at least 6 characters' });
@@ -107,6 +114,7 @@ export async function POST(request: NextRequest) {
         ...employee,
         password,
         role: assignedRole,
+        mustChangePassword,
       });
     }
 
@@ -148,6 +156,7 @@ export async function POST(request: NextRequest) {
             startDate: parsedStartDate,
             position: employee.position || null,
             role: (employee.role || 'employee') as any, // Type assertion for Prisma enum
+            mustChangePassword: employee.mustChangePassword || false,
           },
         });
 

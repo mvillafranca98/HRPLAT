@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { getRoleDisplayName } from '@/lib/roles';
+import { canAccessContracts } from '@/lib/contractAccess';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -33,8 +34,8 @@ export default function Navbar() {
     router.refresh();
   };
 
-  // Don't show navbar on login/register/forgot-password pages
-  if (pathname === '/' || pathname === '/register' || pathname === '/forgot-password') {
+  // Don't show navbar on login/register/forgot-password/change-password pages
+  if (pathname === '/' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/change-password') {
     return null;
   }
 
@@ -85,6 +86,18 @@ export default function Navbar() {
               >
                 Agregar Empleado
               </Link>
+              {canAccessContracts(userRole) && (
+                <Link
+                  href="/contracts"
+                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+                    pathname === '/contracts' || pathname?.startsWith('/contracts/')
+                      ? 'border-indigo-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  }`}
+                >
+                  Contratos
+                </Link>
+              )}
             </div>
           </div>
 
@@ -143,6 +156,18 @@ export default function Navbar() {
           >
             Agregar Empleado
           </Link>
+          {canAccessContracts(userRole) && (
+            <Link
+              href="/contracts"
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                pathname === '/contracts' || pathname?.startsWith('/contracts/')
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-500'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Contratos
+            </Link>
+          )}
         </div>
         {userEmail && (
           <div className="pt-4 pb-3 border-t border-gray-200 px-4">

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Role, getAssignableRoles, getRoleDisplayName } from '@/lib/roles';
+import { canAccessContracts } from '@/lib/contractAccess';
 
 interface Employee {
   id: string;
@@ -14,6 +16,7 @@ interface Employee {
   address: string | null;
   startDate: Date | null;
   position: string | null;
+  role: string;
 }
 
 export default function EditEmployeePage() {
@@ -30,12 +33,22 @@ export default function EditEmployeePage() {
     address: '',
     startDate: '',
     position: '',
+    role: Role.employee,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [assignableRoles, setAssignableRoles] = useState<Role[]>([]);
+  const [currentEmployeeRole, setCurrentEmployeeRole] = useState<Role | null>(null);
 
   useEffect(() => {
+    // Get current user's role from localStorage
+    if (typeof window !== 'undefined') {
+      const currentUserRole = localStorage.getItem('userRole');
+      setUserRole(currentUserRole);
+    }
+    
     if (employeeId) {
       fetchEmployee();
     }
@@ -59,6 +72,9 @@ export default function EditEmployeePage() {
       }
 
       const employee: Employee = await response.json();
+      const employeeRole = (employee.role as Role) || Role.employee;
+      setCurrentEmployeeRole(employeeRole);
+      
       setFormData({
         name: employee.name || '',
         email: employee.email || '',
@@ -69,8 +85,18 @@ export default function EditEmployeePage() {
         startDate: employee.startDate 
           ? new Date(employee.startDate).toISOString().split('T')[0]
           : '',
-          position: employee.position || '',
+        position: employee.position || '',
+        role: employeeRole,
       });
+      
+      // Update assignable roles to include current employee role if not already included
+      if (typeof window !== 'undefined') {
+        const currentUserRole = localStorage.getItem('userRole');
+        const assignable = getAssignableRoles(currentUserRole);
+        // Include current employee role in the list so it can be displayed
+        const rolesToShow = [...new Set([...assignable, employeeRole])];
+        setAssignableRoles(rolesToShow);
+      }
     } catch (err) {
       console.error('Error fetching employee:', err);
       setError('Error al cargar la información del empleado. Por favor intenta de nuevo.');
@@ -91,12 +117,15 @@ export default function EditEmployeePage() {
         return;
       }
 
+      const creatorEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+      
       const response = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
           startDate: formData.startDate || null,
+          creatorEmail: creatorEmail,
         }),
       });
 
@@ -117,7 +146,7 @@ export default function EditEmployeePage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -139,11 +168,21 @@ export default function EditEmployeePage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">Editar Empleado</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Modifica la información del empleado
-            </p>
+          <div className="mb-6 flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Editar Empleado</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Modifica la información del empleado
+              </p>
+            </div>
+            {canAccessContracts(userRole) && employeeId && (
+              <Link
+                href={`/contracts/new?userId=${employeeId}`}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                + Crear Contrato
+              </Link>
+            )}
           </div>
 
           {error && (
@@ -282,6 +321,31 @@ export default function EditEmployeePage() {
                   placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador"
                 />
               </div>
+
+              {assignableRoles.length > 0 && (
+                <div>
+                  <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                    Rol/Cargo *
+                  </label>
+                  <select
+                    id="role"
+                    name="role"
+                    required
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-white"
+                  >
+                    {assignableRoles.map((r) => (
+                      <option key={r} value={r}>
+                        {getRoleDisplayName(r)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
