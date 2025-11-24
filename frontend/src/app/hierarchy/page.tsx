@@ -153,6 +153,8 @@ export default function HierarchyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [availableWidth, setAvailableWidth] = useState<number>(0);
 
   useEffect(() => {
     fetchHierarchy();
@@ -184,11 +186,64 @@ export default function HierarchyPage() {
     return new Map<string, LayoutInfo>();
   }, [tree]);
 
+  // Calculate chart width from layout
+  const chartWidth = useMemo(() => {
+    if (layout.size === 0) return 0;
+    const CARD_WIDTH = 160;
+    let maxX = 0;
+    layout.forEach(l => {
+      maxX = Math.max(maxX, l.x + CARD_WIDTH / 2);
+    });
+    return maxX + 40;
+  }, [layout]);
+
+  // Calculate scale factor
+  const scale = useMemo(() => {
+    if (availableWidth === 0 || chartWidth === 0) return 1;
+    if (chartWidth > availableWidth) {
+      return availableWidth / chartWidth;
+    }
+    return 1;
+  }, [availableWidth, chartWidth]);
+
   useEffect(() => {
     if (calculatedLayout.size > 0) {
       setLayout(calculatedLayout);
     }
   }, [calculatedLayout]);
+
+  // Measure available container width and update on resize
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setAvailableWidth(containerRef.current.clientWidth);
+      }
+    };
+
+    // Initial measurement - use requestAnimationFrame to ensure layout is complete
+    requestAnimationFrame(() => {
+      updateWidth();
+    });
+
+    // Set up ResizeObserver to track container width changes
+    const resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setAvailableWidth(entry.contentRect.width);
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    // Also listen to window resize as fallback
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [tree.length]); // Re-setup observer when tree changes (container might remount)
 
   const buildTree = (employees: Employee[]): TreeNode[] => {
     const employeeMap = new Map<string, TreeNode>();
@@ -324,10 +379,9 @@ export default function HierarchyPage() {
 
     return (
       <div 
-        className="org-chart-wrapper relative mx-auto"
+        className="org-chart-wrapper relative"
         style={{
           width: `${maxX + 40}px`,
-          minWidth: `${maxX + 40}px`,
           minHeight: `${maxY + 40}px`
         }}
       >
@@ -485,6 +539,10 @@ export default function HierarchyPage() {
           .org-chart-wrapper {
             page-break-inside: avoid;
           }
+          /* Disable scaling for print/PDF export */
+          .chart-scale-container {
+            transform: none !important;
+          }
         }
       `}</style>
       
@@ -537,8 +595,28 @@ export default function HierarchyPage() {
                 ref={printRef}
                 className="bg-white shadow rounded-lg p-8 print:shadow-none print:p-4 print:bg-transparent"
               >
-                <div className="py-4 print:py-2 overflow-x-auto print:overflow-visible" style={{ width: '100%' }}>
-                  {renderOrgChart()}
+                <div 
+                  ref={containerRef}
+                  className="py-4 print:py-2 overflow-hidden print:overflow-visible"
+                  style={{ width: '100%' }}
+                >
+                  {/* Outer scaling container: width 100%, overflow hidden, center content */}
+                  <div 
+                    className="flex justify-center print:block"
+                    style={{ width: '100%', overflow: 'hidden' }}
+                  >
+                    {/* Inner scaling container: transform scale, transformOrigin top center, width fit-content */}
+                    <div
+                      className="chart-scale-container"
+                      style={{
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top center',
+                        width: 'fit-content'
+                      }}
+                    >
+                      {renderOrgChart()}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
