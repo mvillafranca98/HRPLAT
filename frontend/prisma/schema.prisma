@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Admin
+  HR_Staff
+  Management
+  employee
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  password          String
+  name              String?
+  role              Role       @default(employee)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  address           String?
+  dni               String?
+  phoneNumber       String?
+  rtn               String?
+  startDate         DateTime?
+  position          String?
+  mustChangePassword Boolean   @default(false)
+  reportsToId       String?
+  reportsTo        User?      @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
+  directReports     User[]     @relation("UserReportsTo")
+  contracts         Contract[]
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salary      Float
+  startDate   DateTime
+  endDate     DateTime?
+  contractType String? // e.g., "Permanent", "Temporary", "Contract", "Internship"
+  status      String   @default("Active") // "Active", "Terminated", "Expired"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
