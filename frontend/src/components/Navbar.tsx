@@ -100,6 +100,16 @@ export default function Navbar() {
               >
                 Agregar Empleado
               </Link>
+              <Link
+                href="/hierarchy"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+                  pathname === '/hierarchy'
+                    ? 'border-indigo-500 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                Jerarquía
+              </Link>
               {canAccessContracts(userRole) && (
                 <Link
                   href="/contracts"
@@ -169,6 +179,16 @@ export default function Navbar() {
             }`}
           >
             Agregar Empleado
+          </Link>
+          <Link
+            href="/hierarchy"
+            className={`block px-3 py-2 rounded-md text-base font-medium ${
+              pathname === '/hierarchy'
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-500'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Jerarquía
           </Link>
           {canAccessContracts(userRole) && (
             <Link
