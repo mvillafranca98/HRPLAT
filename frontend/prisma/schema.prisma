@@ -33,6 +33,7 @@ model User {
   reportsTo        User?      @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
   directReports     User[]     @relation("UserReportsTo")
   contracts         Contract[]
+  leaveRequests     LeaveRequest[]
 }
 
 model Contract {
@@ -49,4 +50,23 @@ model Contract {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  type        String    // "Vacation", "Sick Leave", "Personal", "Other"
+  reason      String?
+  status      String    @default("Pending") // "Pending", "Approved", "Rejected"
+  reviewedBy  String?   // Admin/HR who reviewed it
+  reviewedAt  DateTime?
+  comments    String?   // Admin comments/notes
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

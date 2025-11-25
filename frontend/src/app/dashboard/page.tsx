@@ -5,18 +5,64 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { canAccessContracts } from '@/lib/contractAccess';
 
+interface LeaveRequest {
+  id: string;
+  startDate: Date;
+  endDate: Date;
+  type: string;
+  status: string;
+  user: {
+    name: string | null;
+    email: string;
+  };
+}
+
 export default function Dashboard() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showSuccess, setShowSuccess] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const role = localStorage.getItem('userRole');
+      const email = localStorage.getItem('userEmail');
       setUserRole(role);
+      setUserEmail(email);
+      
+      // Fetch pending leave requests
+      if (role) {
+        fetchPendingRequests(role, email);
+      }
     }
   }, []);
+
+  const fetchPendingRequests = async (role: string | null, email: string | null) => {
+    setLoadingRequests(true);
+    try {
+      const response = await fetch('/api/leave-requests', {
+        headers: {
+          'x-user-role': role || '',
+          'x-user-email': email || '',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter to show only pending requests
+        const pending = data.filter((req: LeaveRequest) => req.status === 'Pending');
+        // Limit to 5 most recent
+        setPendingRequests(pending.slice(0, 5));
+      }
+    } catch (err) {
+      console.error('Error fetching pending requests:', err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
 
   useEffect(() => {
     // Check if employee was just added
@@ -123,7 +169,104 @@ export default function Dashboard() {
                 </div>
               </Link>
             )}
+
+            <Link
+              href="/leave-requests"
+              className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
+            >
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="absolute inset-0" aria-hidden="true" />
+                <p className="text-sm font-medium text-gray-900">Solicitudes de Permiso</p>
+                <p className="text-sm text-gray-500 truncate">
+                  {userRole === 'Admin' || userRole === 'HR_Staff' 
+                    ? 'Gestionar solicitudes' 
+                    : 'Ver mis solicitudes'}
+                </p>
+              </div>
+            </Link>
           </div>
+
+          {/* Pending Leave Requests Section */}
+          {(userRole === 'Admin' || userRole === 'HR_Staff' || userRole === 'employee') && (
+            <div className="mt-8">
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-medium text-gray-900">
+                      {userRole === 'Admin' || userRole === 'HR_Staff' 
+                        ? 'Solicitudes Pendientes' 
+                        : 'Mis Solicitudes Pendientes'}
+                    </h2>
+                    <Link
+                      href={userRole === 'Admin' || userRole === 'HR_Staff' 
+                        ? '/leave-requests/manage' 
+                        : '/leave-requests'}
+                      className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
+                    >
+                      Ver todas →
+                    </Link>
+                  </div>
+                </div>
+                <div className="px-6 py-4">
+                  {loadingRequests ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
+                      <p className="mt-2 text-sm text-gray-500">Cargando...</p>
+                    </div>
+                  ) : pendingRequests.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No hay solicitudes pendientes.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-gray-200">
+                      {pendingRequests.map((request) => (
+                        <li key={request.id} className="py-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              {(userRole === 'Admin' || userRole === 'HR_Staff') && (
+                                <p className="text-sm font-medium text-gray-900">
+                                  {request.user.name || request.user.email}
+                                </p>
+                              )}
+                              <p className="text-sm text-gray-500">
+                                {request.type === 'Vacation' ? 'Vacaciones' :
+                                 request.type === 'Sick Leave' ? 'Día por Enfermedad' :
+                                 request.type === 'Personal' ? 'Día Personal' :
+                                 request.type}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {new Date(request.startDate).toLocaleDateString('es-HN')} - {new Date(request.endDate).toLocaleDateString('es-HN')}
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Pendiente
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!loadingRequests && pendingRequests.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <Link
+                        href={userRole === 'Admin' || userRole === 'HR_Staff' 
+                          ? '/leave-requests/manage' 
+                          : '/leave-requests'}
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        Ver todas las solicitudes →
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

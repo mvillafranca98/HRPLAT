@@ -110,6 +110,16 @@ export default function Navbar() {
               >
                 Jerarquía
               </Link>
+              <Link
+                href="/leave-requests"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+                  pathname === '/leave-requests' || pathname?.startsWith('/leave-requests/')
+                    ? 'border-indigo-500 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                Solicitudes
+              </Link>
               {canAccessContracts(userRole) && (
                 <Link
                   href="/contracts"
@@ -189,6 +199,16 @@ export default function Navbar() {
             }`}
           >
             Jerarquía
+          </Link>
+          <Link
+            href="/leave-requests"
+            className={`block px-3 py-2 rounded-md text-base font-medium ${
+              pathname === '/leave-requests' || pathname?.startsWith('/leave-requests/')
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-500'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Solicitudes
           </Link>
           {canAccessContracts(userRole) && (
             <Link
