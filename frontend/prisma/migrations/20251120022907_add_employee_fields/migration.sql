@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "address" TEXT;
+ALTER TABLE "User" ADD COLUMN "dni" TEXT;
+ALTER TABLE "User" ADD COLUMN "phoneNumber" TEXT;
+ALTER TABLE "User" ADD COLUMN "rtn" TEXT;
+ALTER TABLE "User" ADD COLUMN "startDate" DATETIME;
