@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Admin
+  HR_Staff
+  Management
+  employee
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  password          String
+  name              String?
+  role              Role       @default(employee)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  address           String?
+  dni               String?
+  phoneNumber       String?
+  rtn               String?
+  startDate         DateTime?
+  position          String?
+  mustChangePassword Boolean   @default(false)
+  reportsToId       String?
+  reportsTo        User?      @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
+  directReports     User[]     @relation("UserReportsTo")
+  contracts         Contract[]
+  leaveRequests     LeaveRequest[]
+  profileImageKey   String?    // S3 key for profile image
+  documents         UserDocument[]
+}
+
+enum DocumentType {
+  PROFILE
+  DNI
+  RTN
+}
+
+model UserDocument {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  docType     DocumentType
+  s3Key       String
+  fileName    String?      // Original filename
+  fileSize    Int?         // File size in bytes
+  mimeType    String?      // MIME type (e.g., image/jpeg)
+  isActive    Boolean      @default(true) // For PROFILE, only one active at a time
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([userId, docType])
+  // Note: Unique constraint for active profile images is enforced in application logic
+  // Prisma doesn't support conditional unique constraints
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salary      Float
+  startDate   DateTime
+  endDate     DateTime?
+  contractType String? // e.g., "Permanent", "Temporary", "Contract", "Internship"
+  status      String   @default("Active") // "Active", "Terminated", "Expired"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  type        String    // "Vacation", "Sick Leave", "Personal", "Other"
+  reason      String?
+  status      String    @default("Pending") // "Pending", "Approved", "Rejected"
+  reviewedBy  String?   // Admin/HR who reviewed it
+  reviewedAt  DateTime?
+  comments    String?   // Admin comments/notes
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}

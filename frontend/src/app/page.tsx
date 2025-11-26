@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -24,12 +25,39 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        // Store user data in localStorage for navbar display and role-based access
+        if (data.user && typeof window !== 'undefined') {
+          // Clear any old data first
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('userName');
+          localStorage.removeItem('userRole');
+          
+          // Store new user data
+          if (data.user.email) {
+          localStorage.setItem('userEmail', data.user.email);
+          }
+          if (data.user.name) {
+            localStorage.setItem('userName', data.user.name);
+          }
+          if (data.user.role) {
+            localStorage.setItem('userRole', data.user.role);
+          }
+        }
+        
+        // Check if password change is required
+        if (data.user?.mustChangePassword || data.mustChangePassword) {
+          router.push('/change-password');
+          router.refresh(); // Force refresh to update navbar
+        } else {
         router.push('/dashboard');
+          router.refresh(); // Force refresh to update navbar
+        }
       } else {
-        setError('Invalid email or password');
+        setError('Contraseño o correo electrónico incorrectos');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('Se produjo un error. Por favor, inténtelo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -39,7 +67,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Plataforma de Recursos Humanos</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Departamento de Recursos Humanos</h1>
           <p className="mt-2 text-gray-600">Inicia sesión con tu cuenta</p>
         </div>
         
@@ -81,7 +109,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="••••••••"
+                placeholder=""
               />
             </div>
           </div>
@@ -112,8 +140,15 @@ export default function LoginPage() {
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
+          </div>
+
+          <div className="text-center text-sm mt-4">
+            <span className="text-gray-600">¿No tienes una cuenta? </span>
+            <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+              Crea una nueva cuenta
+            </Link>
           </div>
         </form>
       </div>
