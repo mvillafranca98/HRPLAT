@@ -34,6 +34,33 @@ model User {
   directReports     User[]     @relation("UserReportsTo")
   contracts         Contract[]
   leaveRequests     LeaveRequest[]
+  profileImageKey   String?    // S3 key for profile image
+  documents         UserDocument[]
+}
+
+enum DocumentType {
+  PROFILE
+  DNI
+  RTN
+}
+
+model UserDocument {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  docType     DocumentType
+  s3Key       String
+  fileName    String?      // Original filename
+  fileSize    Int?         // File size in bytes
+  mimeType    String?      // MIME type (e.g., image/jpeg)
+  isActive    Boolean      @default(true) // For PROFILE, only one active at a time
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([userId, docType])
+  // Note: Unique constraint for active profile images is enforced in application logic
+  // Prisma doesn't support conditional unique constraints
 }
 
 model Contract {

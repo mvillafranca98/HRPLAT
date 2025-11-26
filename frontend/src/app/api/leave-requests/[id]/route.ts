@@ -36,6 +36,12 @@ export async function PUT(
       );
     }
 
+    // Verify prisma.leaveRequest exists
+    if (!prisma.leaveRequest) {
+      console.error('Prisma LeaveRequest model not available. Regenerating Prisma client...');
+      throw new Error('Prisma LeaveRequest model not available. Please restart the dev server.');
+    }
+
     // Find leave request
     const leaveRequest = await prisma.leaveRequest.findUnique({
       where: { id },

@@ -135,6 +135,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify prisma.leaveRequest exists
+    if (!prisma.leaveRequest) {
+      console.error('Prisma LeaveRequest model not available. Regenerating Prisma client...');
+      // Force Prisma client regeneration
+      await import('@prisma/client').then(() => {
+        console.log('Prisma client imported');
+      });
+      throw new Error('Prisma LeaveRequest model not available. Please restart the dev server.');
+    }
+
     // Create leave request
     const leaveRequest = await prisma.leaveRequest.create({
       data: {
@@ -166,8 +176,14 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error creating leave request:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { 
+        error: 'Internal server error', 
+        details: error.message || 'Unknown error',
+        code: error.code,
+      },
       { status: 500 }
     );
   }

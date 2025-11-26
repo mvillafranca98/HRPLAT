@@ -35,7 +35,7 @@ export default function LoginPage() {
           
           // Store new user data
           if (data.user.email) {
-            localStorage.setItem('userEmail', data.user.email);
+          localStorage.setItem('userEmail', data.user.email);
           }
           if (data.user.name) {
             localStorage.setItem('userName', data.user.name);
@@ -50,7 +50,7 @@ export default function LoginPage() {
           router.push('/change-password');
           router.refresh(); // Force refresh to update navbar
         } else {
-          router.push('/dashboard');
+        router.push('/dashboard');
           router.refresh(); // Force refresh to update navbar
         }
       } else {

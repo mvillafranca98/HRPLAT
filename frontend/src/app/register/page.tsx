@@ -54,13 +54,13 @@ function RegisterForm() {
 
     // Client-side validation (only for public registration or if password is provided)
     if (!isFromDashboard) {
-      if (password !== confirmPassword) {
-        setError('Las contraseñas no coinciden');
-        setLoading(false);
-        return;
-      }
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden');
+      setLoading(false);
+      return;
+    }
 
-      if (password.length < 6) {
+    if (password.length < 6) {
         setError('La contraseña debe tener al menos 6 caracteres');
         setLoading(false);
         return;
@@ -173,24 +173,24 @@ function RegisterForm() {
             </div>
             
             {!isFromDashboard && (
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="••••••••"
-                  minLength={6}
-                />
-                <p className="mt-1 text-xs text-gray-500">Mínimo 6 caracteres</p>
-              </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Contraseña
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="••••••••"
+                minLength={6}
+              />
+              <p className="mt-1 text-xs text-gray-500">Mínimo 6 caracteres</p>
+            </div>
             )}
 
             {isFromDashboard && (
@@ -222,23 +222,23 @@ function RegisterForm() {
             )}
 
             {!isFromDashboard && (
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                  Confirmar contraseña
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="••••••••"
-                  minLength={6}
-                />
-              </div>
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                Confirmar contraseña
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="••••••••"
+                minLength={6}
+              />
+            </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -323,20 +323,20 @@ function RegisterForm() {
             </div>
 
             <div>
-              <label htmlFor="position" className="block text-sm font-medium text-gray-700">
-                Cargo/Puesto *
-              </label>
-              <input
-                id="position"
-                name="position"
-                type="text"
-                required
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador, etc."
-              />
-            </div>
+            <label htmlFor="position" className="block text-sm font-medium text-gray-700">
+              Cargo/Puesto *
+            </label>
+            <input
+              id="position"
+              name="position"
+              type="text"
+              required
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+              placeholder="Ej: Gerente de Recursos Humanos, Desarrollador, Contador, etc."
+            />
+          </div>
 
             {isFromDashboard && assignableRoles.length > 0 && (
               <div>

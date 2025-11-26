@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getRoleDisplayName, canEditUser, getRoleLevel } from '@/lib/roles';
+import ColumnVisibilityToggle from '@/components/ColumnVisibilityToggle';
+import { getColumnVisibility } from '@/lib/columnVisibility';
+import { maskPhoneNumber, maskDNI, maskRTN, parsePhoneWithAreaCode, formatPhoneWithAreaCode } from '@/lib/inputMasks';
 
 interface Employee {
   id: string;
@@ -40,7 +43,6 @@ interface EmployeesResponse {
 
 function EmployeesList() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // All employees for filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -52,92 +54,46 @@ function EmployeesList() {
   const ITEMS_PER_PAGE = 10; // Number of employees per page (within 10-20 range)
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(''); // Immediate value for input field
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(''); // Debounced value for API calls
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<keyof Employee | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
-  // Check if filters are active
-  const hasActiveFilters = searchQuery.trim() !== '' || roleFilter !== 'all';
+  // Ref to maintain focus on search input
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const wasSearchFocusedRef = useRef(false);
 
-  const filteredAndSortedEmployees = useMemo(() => {
-    // Use all employees when filters are active, otherwise use paginated employees
-    const sourceEmployees = hasActiveFilters ? allEmployees : employees;
-    let result = [...sourceEmployees];
+  // Column definitions for visibility toggle
+  const tableColumns = useMemo(() => [
+    { key: 'name', label: 'Nombre Completo' },
+    { key: 'dni', label: 'DNI' },
+    { key: 'rtn', label: 'RTN' },
+    { key: 'phoneNumber', label: 'Teléfono' },
+    { key: 'address', label: 'Dirección' },
+    { key: 'startDate', label: 'Fecha de Inicio' },
+    { key: 'email', label: 'Email' },
+    { key: 'position', label: 'Cargo/Puesto' },
+    { key: 'role', label: 'Rol' },
+    { key: 'reportsTo', label: 'Manager' },
+    { key: 'actions', label: 'Acciones' },
+  ], []);
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(employee => {
-        const name = (employee.name || '').toLowerCase();
-        const email = employee.email.toLowerCase();
-        const dni = (employee.dni || '').toLowerCase();
-        
-        // Name: match if starts with query OR any word in the name starts with query
-        const nameMatch = name.startsWith(query) || 
-                         name.split(' ').some(word => word.startsWith(query));
-        
-        // Email: only match if it starts with query
-        const emailMatch = email.startsWith(query);
-        
-        // DNI: only match if it starts with query
-        const dniMatch = dni.startsWith(query);
-        
-        return nameMatch || emailMatch || dniMatch;
-      });
-      
-      // Sort results to prioritize name matches (especially those starting with query)
-      result.sort((a, b) => {
-        const aName = (a.name || '').toLowerCase();
-        const bName = (b.name || '').toLowerCase();
-        const query = searchQuery.toLowerCase().trim();
-        
-        // Check if name starts with query (highest priority)
-        const aStartsWith = aName.startsWith(query);
-        const bStartsWith = bName.startsWith(query);
-        
-        // Check if any word in name starts with query (second priority)
-        const aWordStarts = !aStartsWith && aName.split(' ').some(word => word.startsWith(query));
-        const bWordStarts = !bStartsWith && bName.split(' ').some(word => word.startsWith(query));
-        
-        // Priority: starts with query > word starts with query > other matches
-        if (aStartsWith && !bStartsWith) return -1;
-        if (!aStartsWith && bStartsWith) return 1;
-        if (aWordStarts && !bWordStarts) return -1;
-        if (!aWordStarts && bWordStarts) return 1;
-        
-        // If same priority, maintain original order
-        return 0;
-      });
-    }
+  // Column visibility state
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+    getColumnVisibility('employees-table', tableColumns.map(col => col.key))
+  );
 
-    if (roleFilter !== 'all') {
-      result = result.filter(employee => employee.role === roleFilter);
-    }
+  // Debounce search query - update debounced value after user stops typing for 500ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // Wait 500ms after user stops typing
 
-    if (sortField) {
-      result.sort((a, b) => {
-        let aValue: any = a[sortField];
-        let bValue: any = b[sortField];
-
-        if (aValue === null || aValue === undefined) return 1;
-        if (bValue === null || bValue === undefined) return -1;
-        if (sortField === 'startDate') {
-          aValue = aValue ? new Date(aValue).getTime() : 0;
-          bValue = bValue ? new Date(bValue).getTime() : 0;
-        } else {
-          // Handle strings (convert to lowercase for case-insensitive sorting)
-          aValue = String(aValue).toLowerCase();
-          bValue = String(bValue).toLowerCase();
-        }
-
-        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-  
-    return result;
-}, [employees, allEmployees, hasActiveFilters, searchQuery, roleFilter, sortField, sortDirection]);
+    return () => {
+      clearTimeout(timer); // Clear timer if user types again
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     // Get current user info
@@ -148,33 +104,50 @@ function EmployeesList() {
       setUserEmail(email);
     }
     
-    // Check if bulk add was successful first
+    // Check if bulk add was successful
     if (searchParams.get('bulkSuccess') === 'true') {
       setShowSuccess(true);
       setCurrentPage(1);
       router.replace('/employees', { scroll: false });
       setTimeout(() => setShowSuccess(false), 5000);
-      // Fetch page 1 after resetting
-      fetchEmployees(1);
-    } else {
-      fetchEmployees(currentPage);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchParams, router]);
+  }, [searchParams, router]);
 
-  // Fetch all employees when filters become active or change
+  // Initial fetch and refetch when filters/sort change
   useEffect(() => {
-    if (hasActiveFilters) {
-      fetchAllEmployees();
-    }
+    fetchEmployees(currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, roleFilter]);
+  }, [currentPage]);
 
   const fetchEmployees = async (page: number = currentPage) => {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch(`/api/employees?page=${page}&limit=${ITEMS_PER_PAGE}`);
+      
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: ITEMS_PER_PAGE.toString(),
+      });
+      
+      // Add search parameter if provided (use debounced value)
+      if (debouncedSearchQuery.trim()) {
+        params.append('search', debouncedSearchQuery.trim());
+      }
+      
+      // Add role filter if not 'all'
+      if (roleFilter !== 'all') {
+        params.append('role', roleFilter);
+      }
+      
+      // Add sort parameters if provided
+      if (sortField) {
+        params.append('sortBy', sortField);
+        params.append('sortOrder', sortDirection);
+      }
+      
+      const response = await fetch(`/api/employees?${params.toString()}`);
       
       if (response.ok) {
         const data: EmployeesResponse = await response.json();
@@ -198,43 +171,37 @@ function EmployeesList() {
       setLoading(false);
     }
   };
-
-  // Fetch all employees for filtering (without pagination)
-  const fetchAllEmployees = async () => {
-    try {
-      setError('');
-      // First, get the total count to know how many pages to fetch
-      const firstPageResponse = await fetch(`/api/employees?page=1&limit=1000`);
-      
-      if (firstPageResponse.ok) {
-        const firstPageData: EmployeesResponse = await firstPageResponse.json();
-        const totalCount = firstPageData.pagination.totalCount;
-        let allEmps = [...firstPageData.employees];
-        
-        // If there are more employees, fetch remaining pages
-        if (totalCount > 1000) {
-          const totalPages = Math.ceil(totalCount / 1000);
-          const fetchPromises = [];
-          
-          for (let page = 2; page <= totalPages; page++) {
-            fetchPromises.push(
-              fetch(`/api/employees?page=${page}&limit=1000`)
-                .then(res => res.json())
-                .then((data: EmployeesResponse) => data.employees)
-            );
+  
+  // Restore focus to search input after loading completes if it was focused before
+  useEffect(() => {
+    if (!loading && wasSearchFocusedRef.current && searchInputRef.current && searchQuery) {
+      // Use requestAnimationFrame to ensure DOM has updated after re-render
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+            // Restore cursor position to end of input
+            const length = searchInputRef.current.value.length;
+            searchInputRef.current.setSelectionRange(length, length);
           }
-          
-          const remainingEmployees = await Promise.all(fetchPromises);
-          allEmps = [...allEmps, ...remainingEmployees.flat()];
-        }
-        
-        setAllEmployees(allEmps);
-      }
-    } catch (err) {
-      console.error('Error fetching all employees:', err);
-      setError('Error al cargar todos los empleados para filtrar');
+        }, 10);
+      });
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Refetch when filters or sort change (resets to page 1)
+  // Use debouncedSearchQuery instead of searchQuery to avoid triggering on every keystroke
+  useEffect(() => {
+    // Reset to page 1 when filters or sort change
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      // If already on page 1, trigger fetch directly
+      fetchEmployees(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery, roleFilter, sortField, sortDirection]);
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
@@ -263,13 +230,31 @@ function EmployeesList() {
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1); // Reset to first page when searching
+    // Page reset and refetch handled by useEffect
+  };
+  
+  // Track when search input gains focus
+  const handleSearchFocus = () => {
+    wasSearchFocusedRef.current = true;
+  };
+  
+  // Track when search input loses focus (but only if focus moves outside the component)
+  const handleSearchBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Only mark as unfocused if focus moves outside the search input AND we're not loading
+    // This prevents losing focus during re-renders while typing/searching
+    if (!loading) {
+      setTimeout(() => {
+        if (document.activeElement !== searchInputRef.current && document.activeElement?.id !== 'search') {
+          wasSearchFocusedRef.current = false;
+        }
+      }, 100);
+    }
   };
 
   // Handle role filter change
   const handleRoleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setRoleFilter(e.target.value);
-    setCurrentPage(1); // Reset to first page when filtering
+    // Page reset and refetch handled by useEffect
   };
 
   // Handle column sorting
@@ -282,15 +267,17 @@ function EmployeesList() {
       setSortField(field);
       setSortDirection('asc');
     }
+    // Refetch handled by useEffect
   };
 
   // Clear all filters
   const clearFilters = () => {
     setSearchQuery('');
+    setDebouncedSearchQuery(''); // Clear debounced value immediately
     setRoleFilter('all');
     setSortField(null);
     setSortDirection('asc');
-    setCurrentPage(1);
+    // Page reset and refetch handled by useEffect
   };
   
   // Check if current user can edit an employee
@@ -331,6 +318,32 @@ function EmployeesList() {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  // Format display values for table (handles area codes)
+  const formatPhoneForDisplay = (phone: string | null): string => {
+    if (!phone) return 'N/A';
+    
+    // Parse phone number to extract area code and number
+    const parsed = parsePhoneWithAreaCode(phone);
+    
+    // If we found an area code, format with it
+    if (parsed.areaCode && parsed.phoneNumber) {
+      return formatPhoneWithAreaCode(parsed.areaCode, parsed.phoneNumber);
+    }
+    
+    // Otherwise just format the phone number
+    return maskPhoneNumber(phone);
+  };
+
+  const formatDNIForDisplay = (dni: string | null): string => {
+    if (!dni) return 'N/A';
+    return maskDNI(dni);
+  };
+
+  const formatRTNForDisplay = (rtn: string | null): string => {
+    if (!rtn) return 'N/A';
+    return maskRTN(rtn);
   };
 
   if (loading) {
@@ -386,9 +399,10 @@ function EmployeesList() {
           {/* Search and Filter Section */}
           {employees.length > 0 && (
             <div className="mb-6 bg-white shadow rounded-lg p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Search Bar */}
-                <div className="md:col-span-2">
+              <div className="flex justify-between items-start mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 mr-4">
+                  {/* Search Bar */}
+                  <div className="md:col-span-2">
                   <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
                     Buscar
                   </label>
@@ -399,10 +413,13 @@ function EmployeesList() {
                       </svg>
                     </div>
                     <input
+                      ref={searchInputRef}
                       type="text"
                       id="search"
                       value={searchQuery}
                       onChange={handleSearchChange}
+                      onFocus={handleSearchFocus}
+                      onBlur={handleSearchBlur}
                       placeholder="Buscar por nombre, email o DNI..."
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
@@ -427,18 +444,31 @@ function EmployeesList() {
                     <option value="employee">Empleado</option>
                   </select>
                 </div>
+                </div>
+                
+                {/* Column Visibility Toggle */}
+                <div className="flex-shrink-0">
+                  <ColumnVisibilityToggle
+                    tableId="employees-table"
+                    columns={tableColumns}
+                    onVisibilityChange={setColumnVisibility}
+                  />
+                </div>
               </div>
 
               {/* Active Filters Display */}
-              {(searchQuery || roleFilter !== 'all' || sortField) && (
+              {(debouncedSearchQuery || roleFilter !== 'all' || sortField) && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Filtros activos:</span>
                   
-                  {searchQuery && (
+                  {debouncedSearchQuery && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                      Búsqueda: "{searchQuery}"
+                      Búsqueda: "{debouncedSearchQuery}"
                       <button
-                        onClick={() => setSearchQuery('')}
+                        onClick={() => {
+                          setSearchQuery('');
+                          setDebouncedSearchQuery('');
+                        }}
                         className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-indigo-200"
                         aria-label="Remove search filter"
                       >
@@ -493,15 +523,22 @@ function EmployeesList() {
 
               {/* Results count */}
               <div className="mt-3 text-sm text-gray-600">
-                {hasActiveFilters ? (
+                {pagination ? (
                   <>
-                    Mostrando {filteredAndSortedEmployees.length} resultado{filteredAndSortedEmployees.length !== 1 ? 's' : ''}
-                    {pagination && ` de ${pagination.totalCount} empleados en total`}
+                    Mostrando{' '}
+                    <span className="font-medium">
+                      {pagination.currentPage === 1 ? 1 : (pagination.currentPage - 1) * pagination.pageSize + 1}
+                    </span>{' '}
+                    a{' '}
+                    <span className="font-medium">
+                      {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalCount)}
+                    </span>{' '}
+                    de <span className="font-medium">{pagination.totalCount}</span> resultado{pagination.totalCount !== 1 ? 's' : ''}
+                    {(searchQuery.trim() || roleFilter !== 'all') && ' (filtrado)'}
                   </>
                 ) : (
                   <>
-                    Mostrando {filteredAndSortedEmployees.length} de {employees.length} empleados
-                    {pagination && ` (${pagination.totalCount} en total)`}
+                    Mostrando {employees.length} empleado{employees.length !== 1 ? 's' : ''}
                   </>
                 )}
               </div>
@@ -525,145 +562,192 @@ function EmployeesList() {
                   <thead className="bg-gray-50">
                     <tr>
                       {/* Sortable Name column */}
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                        onClick={() => handleSort('name')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Nombre Completo</span>
-                          {sortField === 'name' && (
-                            <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        DNI
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        RTN
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Teléfono
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Dirección
-                      </th>
+                      {columnVisibility.name !== false && (
+                        <th 
+                          scope="col" 
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleSort('name')}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Nombre Completo</span>
+                            {sortField === 'name' && (
+                              <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </div>
+                        </th>
+                      )}
+                      {columnVisibility.dni !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          DNI
+                        </th>
+                      )}
+                      {columnVisibility.rtn !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          RTN
+                        </th>
+                      )}
+                      {columnVisibility.phoneNumber !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Teléfono
+                        </th>
+                      )}
+                      {columnVisibility.address !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Dirección
+                        </th>
+                      )}
                       {/* Sortable Start Date column */}
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                        onClick={() => handleSort('startDate')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Fecha de Inicio</span>
-                          {sortField === 'startDate' && (
-                            <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
+                      {columnVisibility.startDate !== false && (
+                        <th 
+                          scope="col" 
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleSort('startDate')}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Fecha de Inicio</span>
+                            {sortField === 'startDate' && (
+                              <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </div>
+                        </th>
+                      )}
                       {/* Sortable Email column */}
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                        onClick={() => handleSort('email')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Email</span>
-                          {sortField === 'email' && (
-                            <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Cargo/Puesto
-                      </th>
+                      {columnVisibility.email !== false && (
+                        <th 
+                          scope="col" 
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleSort('email')}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Email</span>
+                            {sortField === 'email' && (
+                              <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </div>
+                        </th>
+                      )}
+                      {columnVisibility.position !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Cargo/Puesto
+                        </th>
+                      )}
                       {/* Sortable Role column */}
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                        onClick={() => handleSort('role')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Rol</span>
-                          {sortField === 'role' && (
-                            <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Manager
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Acciones
-                      </th>
+                      {columnVisibility.role !== false && (
+                        <th 
+                          scope="col" 
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleSort('role')}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Rol</span>
+                            {sortField === 'role' && (
+                              <span className="text-indigo-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </div>
+                        </th>
+                      )}
+                      {columnVisibility.reportsTo !== false && (
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Manager
+                        </th>
+                      )}
+                      {columnVisibility.actions !== false && (
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Acciones
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAndSortedEmployees.length === 0 ? (
+                    {employees.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="px-6 py-8 text-center text-sm text-gray-500">
-                          No se encontraron empleados que coincidan con los filtros aplicados.
+                        <td 
+                          colSpan={Object.values(columnVisibility).filter(Boolean).length || 11} 
+                          className="px-6 py-8 text-center text-sm text-gray-500"
+                        >
+                          {loading ? 'Cargando...' : 'No se encontraron empleados que coincidan con los filtros aplicados.'}
                         </td>
                       </tr>
                     ) : (
-                      filteredAndSortedEmployees.map((employee) => (
+                      employees.map((employee) => (
                       <tr key={employee.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {employee.name || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.dni || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.rtn || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.phoneNumber || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          <div className="max-w-xs truncate" title={employee.address || ''}>
-                            {employee.address || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(employee.startDate)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.position || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.role ? getRoleDisplayName(employee.role) : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {employee.reportsTo ? (
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {employee.reportsTo.name || 'N/A'}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {employee.reportsTo.email}
-                              </div>
+                        {columnVisibility.name !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {employee.name || 'N/A'}
+                          </td>
+                        )}
+                        {columnVisibility.dni !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDNIForDisplay(employee.dni)}
+                          </td>
+                        )}
+                        {columnVisibility.rtn !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatRTNForDisplay(employee.rtn)}
+                          </td>
+                        )}
+                        {columnVisibility.phoneNumber !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatPhoneForDisplay(employee.phoneNumber)}
+                          </td>
+                        )}
+                        {columnVisibility.address !== false && (
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            <div className="max-w-xs truncate" title={employee.address || ''}>
+                              {employee.address || 'N/A'}
                             </div>
-                          ) : (
-                            <span className="text-gray-400">Sin manager</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          {canEditEmployee(employee) ? (
-                            <Link
-                              href={`/employees/${employee.id}/edit`}
-                              className="text-indigo-600 hover:text-indigo-900 mr-4"
-                            >
-                              Editar
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400">Sin permiso</span>
-                          )}
-                        </td>
+                          </td>
+                        )}
+                        {columnVisibility.startDate !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDate(employee.startDate)}
+                          </td>
+                        )}
+                        {columnVisibility.email !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {employee.email}
+                          </td>
+                        )}
+                        {columnVisibility.position !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {employee.position || 'N/A'}
+                          </td>
+                        )}
+                        {columnVisibility.role !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {employee.role ? getRoleDisplayName(employee.role) : 'N/A'}
+                          </td>
+                        )}
+                        {columnVisibility.reportsTo !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {employee.reportsTo ? (
+                              <div>
+                                <div className="font-medium text-gray-900">
+                                  {employee.reportsTo.name || 'N/A'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {employee.reportsTo.email}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">Sin manager</span>
+                            )}
+                          </td>
+                        )}
+                        {columnVisibility.actions !== false && (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            {canEditEmployee(employee) ? (
+                              <Link
+                                href={`/employees/${employee.id}/edit`}
+                                className="text-indigo-600 hover:text-indigo-900 mr-4"
+                              >
+                                Editar
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">Sin permiso</span>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))
                     )}
@@ -671,8 +755,8 @@ function EmployeesList() {
                 </table>
               </div>
               
-              {/* Pagination Controls - Only show if no filters applied (client-side filtering) */}
-              {!searchQuery && roleFilter === 'all' && pagination && pagination.totalPages > 1 && (
+              {/* Pagination Controls */}
+              {pagination && pagination.totalPages > 1 && (
                 <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
                   {/* Mobile view - Simple Previous/Next */}
                   <div className="flex-1 flex justify-between sm:hidden">

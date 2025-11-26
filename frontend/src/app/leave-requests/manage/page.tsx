@@ -88,13 +88,22 @@ export default function ManageLeaveRequestsPage() {
   };
 
   const handleConfirmAction = async () => {
-    if (!selectedRequest || !action) return;
+    if (!selectedRequest || !action) {
+      console.error('Missing selectedRequest or action:', { selectedRequest, action });
+      return;
+    }
 
     setProcessingId(selectedRequest.id);
     setError('');
     setSuccess('');
 
     try {
+      console.log('Sending request to approve/reject:', {
+        id: selectedRequest.id,
+        action,
+        status: action === 'approve' ? 'Approved' : 'Rejected',
+      });
+
       const response = await fetch(`/api/leave-requests/${selectedRequest.id}`, {
         method: 'PUT',
         headers: {
@@ -109,19 +118,26 @@ export default function ManageLeaveRequestsPage() {
       });
 
       const data = await response.json();
+      console.log('Response:', { status: response.status, data });
 
       if (response.ok) {
         setSuccess(data.message || `Solicitud ${action === 'approve' ? 'aprobada' : 'rechazada'} exitosamente`);
         setShowModal(false);
+        setSelectedRequest(null);
+        setAction(null);
+        setComments('');
         // Refresh the list
         fetchPendingRequests(userRole, userEmail);
         setTimeout(() => setSuccess(''), 5000);
       } else {
-        setError(data.error || 'Error al procesar la solicitud');
+        const errorMsg = data.error || 'Error al procesar la solicitud';
+        console.error('Error from API:', errorMsg);
+        setError(errorMsg);
+        setProcessingId(null);
       }
-    } catch (err) {
-      setError('Ocurrió un error. Por favor intenta de nuevo.');
-    } finally {
+    } catch (err: any) {
+      console.error('Error in handleConfirmAction:', err);
+      setError(`Ocurrió un error: ${err.message || 'Por favor intenta de nuevo.'}`);
       setProcessingId(null);
     }
   };
@@ -308,11 +324,14 @@ export default function ManageLeaveRequestsPage() {
 
       {/* Confirmation Modal */}
       {showModal && selectedRequest && (
-        <div className="fixed z-10 inset-0 overflow-y-auto">
+        <div className="fixed z-10 inset-0 overflow-y-auto" onClick={() => setShowModal(false)}>
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowModal(false)}></div>
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div 
+              className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-20"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                   {action === 'approve' ? 'Aprobar Solicitud' : 'Rechazar Solicitud'}
@@ -322,6 +341,11 @@ export default function ManageLeaveRequestsPage() {
                     ? '¿Estás seguro de que deseas aprobar esta solicitud de permiso?'
                     : '¿Estás seguro de que deseas rechazar esta solicitud de permiso?'}
                 </p>
+                {error && (
+                  <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+                    {error}
+                  </div>
+                )}
                 <div className="mb-4">
                   <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-2">
                     Comentarios (Opcional)
@@ -348,15 +372,19 @@ export default function ManageLeaveRequestsPage() {
                     Cancelar
                   </button>
                   <button
-                    onClick={handleConfirmAction}
-                    disabled={processingId === selectedRequest.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleConfirmAction();
+                    }}
+                    disabled={processingId === selectedRequest?.id}
                     className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
                       action === 'approve'
                         ? 'bg-green-600 hover:bg-green-700'
                         : 'bg-red-600 hover:bg-red-700'
                     } focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {processingId === selectedRequest.id 
+                    {processingId === selectedRequest?.id 
                       ? 'Procesando...' 
                       : action === 'approve' 
                         ? 'Aprobar' 

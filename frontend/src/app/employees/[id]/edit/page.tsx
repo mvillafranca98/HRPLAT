@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Role, getAssignableRoles, getRoleDisplayName, canEditUser } from '@/lib/roles';
 import { canAccessContracts } from '@/lib/contractAccess';
+import { parsePhoneWithAreaCode, maskPhoneNumber, combinePhoneWithAreaCode, unmask } from '@/lib/inputMasks';
+import DocumentManagement from '@/components/DocumentManagement';
 
 interface Employee {
   id: string;
@@ -35,6 +37,7 @@ export default function EditEmployeePage() {
     email: '',
     dni: '',
     rtn: '',
+    phoneAreaCode: '+504',
     phoneNumber: '',
     address: '',
     startDate: '',
@@ -55,9 +58,11 @@ export default function EditEmployeePage() {
 
   const fetchAvailableManagers = async () => {
     try {
-      const response = await fetch('/api/employees');
+      const response = await fetch('/api/employees?limit=1000');
       if (response.ok) {
-        const allEmployees = await response.json();
+        const data = await response.json();
+        // API returns { employees: [...], pagination: {...} }
+        const allEmployees = data.employees || [];
         // Filter out the current employee (can't report to themselves)
         const managers = allEmployees.filter((e: Employee) => e.id !== employeeId);
         setAvailableManagers(managers);
@@ -123,9 +128,11 @@ export default function EditEmployeePage() {
       // Get current user's ID by fetching all employees and finding by email
       if (currentUserEmail) {
         try {
-          const userResponse = await fetch('/api/employees');
+          const userResponse = await fetch('/api/employees?limit=1000');
           if (userResponse.ok) {
-            const allUsers = await userResponse.json();
+            const userData = await userResponse.json();
+            // API returns { employees: [...], pagination: {...} }
+            const allUsers = userData.employees || [];
             const currentUser = allUsers.find((u: Employee) => u.email === currentUserEmail);
             if (currentUser) {
               setUserId(currentUser.id);
@@ -150,12 +157,16 @@ export default function EditEmployeePage() {
         }
       }
       
+      // Parse phone number to extract area code and phone number
+      const parsedPhone = parsePhoneWithAreaCode(employee.phoneNumber);
+      
       setFormData({
         name: employee.name || '',
         email: employee.email || '',
         dni: employee.dni || '',
         rtn: employee.rtn || '',
-        phoneNumber: employee.phoneNumber || '',
+        phoneAreaCode: parsedPhone.areaCode || '+504',
+        phoneNumber: parsedPhone.phoneNumber || '',
         address: employee.address || '',
         startDate: employee.startDate 
           ? new Date(employee.startDate).toISOString().split('T')[0]
@@ -211,11 +222,21 @@ export default function EditEmployeePage() {
         headers['x-user-role'] = creatorRole;
       }
       
+      // Combine area code and phone number for storage
+      const fullPhoneNumber = combinePhoneWithAreaCode(
+        formData.phoneAreaCode || '+504',
+        formData.phoneNumber
+      );
+      
+      // Prepare form data, excluding phoneAreaCode (it's combined into phoneNumber)
+      const { phoneAreaCode, ...formDataToSend } = formData;
+      
       const response = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({
-          ...formData,
+          ...formDataToSend,
+          phoneNumber: fullPhoneNumber,
           startDate: formData.startDate || null,
           reportsToId: formData.reportsToId || null,
           creatorEmail: creatorEmail,
@@ -240,10 +261,21 @@ export default function EditEmployeePage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    
+    // Apply phone number mask when typing
+    if (name === 'phoneNumber') {
+      const masked = maskPhoneNumber(value);
+      setFormData({
+        ...formData,
+        [name]: masked,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   if (loading) {
@@ -356,16 +388,38 @@ export default function EditEmployeePage() {
                 <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
                   Número de teléfono *
                 </label>
-                <input
-                  id="phoneNumber"
-                  name="phoneNumber"
-                  type="tel"
-                  required
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="+504 9999-9999"
-                />
+                <div className="mt-1 flex rounded-md shadow-sm">
+                  <select
+                    id="phoneAreaCode"
+                    name="phoneAreaCode"
+                    value={formData.phoneAreaCode}
+                    onChange={handleChange}
+                    className="inline-flex items-center px-3 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="+504">+504 (Honduras)</option>
+                    <option value="+1">+1 (USA/Canada)</option>
+                    <option value="+52">+52 (México)</option>
+                    <option value="+506">+506 (Costa Rica)</option>
+                    <option value="+507">+507 (Panamá)</option>
+                    <option value="+502">+502 (Guatemala)</option>
+                    <option value="+503">+503 (El Salvador)</option>
+                    <option value="+505">+505 (Nicaragua)</option>
+                  </select>
+                  <input
+                    id="phoneNumber"
+                    name="phoneNumber"
+                    type="tel"
+                    required
+                    value={formData.phoneNumber}
+                    onChange={handleChange}
+                    maxLength={9} // XXXX-XXXX = 9 characters
+                    className="flex-1 appearance-none relative block w-full px-3 py-2 rounded-r-md border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                    placeholder="9876-5432"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Formato: {formData.phoneAreaCode || '+504'} 9876-5432
+                </p>
               </div>
 
               <div>
@@ -483,6 +537,15 @@ export default function EditEmployeePage() {
               </button>
             </div>
           </form>
+
+          {/* Document Management Section */}
+          <div className="mt-8 bg-white shadow rounded-lg p-6">
+            <DocumentManagement
+              userId={employeeId}
+              userRole={userRole}
+              isEditable={hasEditPermission}
+            />
+          </div>
         </div>
       </div>
     </div>
