@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { calculateVacationBalance, calculateBusinessDays } from '@/lib/vacationBalance';
 
 // GET - Fetch leave requests (role-based access)
 export async function GET(request: NextRequest) {
@@ -133,6 +134,108 @@ export async function POST(request: NextRequest) {
         { error: 'La fecha de fin debe ser posterior a la fecha de inicio' },
         { status: 400 }
       );
+    }
+
+    // Validate vacation requests against available balance
+    if (type === 'Vacation') {
+      // Get user with start date
+      const userWithStartDate = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { startDate: true },
+      });
+
+      if (!userWithStartDate?.startDate) {
+        return NextResponse.json(
+          { error: 'El empleado no tiene fecha de inicio registrada. No se pueden calcular días de vacaciones.' },
+          { status: 400 }
+        );
+      }
+
+      // Calculate current anniversary year boundaries
+      const startDate = new Date(userWithStartDate.startDate);
+      const currentDate = new Date();
+      const startMonth = startDate.getMonth();
+      const startDay = startDate.getDate();
+      const currentMonth = currentDate.getMonth();
+      const currentDay = currentDate.getDate();
+
+      let anniversaryYearStart: Date;
+      let anniversaryYearEnd: Date;
+
+      // Check if anniversary has passed this year
+      if (currentMonth > startMonth || (currentMonth === startMonth && currentDay >= startDay)) {
+        anniversaryYearStart = new Date(currentDate.getFullYear(), startMonth, startDay);
+        anniversaryYearEnd = new Date(currentDate.getFullYear() + 1, startMonth, startDay);
+        anniversaryYearEnd.setDate(anniversaryYearEnd.getDate() - 1);
+      } else {
+        anniversaryYearStart = new Date(currentDate.getFullYear() - 1, startMonth, startDay);
+        anniversaryYearEnd = new Date(currentDate.getFullYear(), startMonth, startDay);
+        anniversaryYearEnd.setDate(anniversaryYearEnd.getDate() - 1);
+      }
+
+      // Get approved vacation requests for current anniversary year
+      const approvedVacations = await prisma.leaveRequest.findMany({
+        where: {
+          userId: user.id,
+          type: 'Vacation',
+          status: 'Approved',
+          OR: [
+            {
+              startDate: {
+                gte: anniversaryYearStart,
+                lte: anniversaryYearEnd,
+              },
+            },
+            {
+              endDate: {
+                gte: anniversaryYearStart,
+                lte: anniversaryYearEnd,
+              },
+            },
+            {
+              AND: [
+                { startDate: { lte: anniversaryYearStart } },
+                { endDate: { gte: anniversaryYearEnd } },
+              ],
+            },
+          ],
+        },
+        select: {
+          startDate: true,
+          endDate: true,
+          type: true,
+        },
+      });
+
+      // Calculate balance
+      const balance = calculateVacationBalance(userWithStartDate.startDate, approvedVacations);
+
+      // Check if employee is in trial period
+      if (balance.isInTrialPeriod) {
+        return NextResponse.json(
+          {
+            error: `El empleado aún está en período de prueba. Faltan ${balance.daysUntilEligible} días para ser elegible para vacaciones.`,
+            balance,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Calculate requested days (excluding holidays)
+      const requestedDays = calculateBusinessDays(parsedStartDate, parsedEndDate);
+
+      // Validate available days
+      if (requestedDays > balance.available) {
+        return NextResponse.json(
+          {
+            error: `No tienes suficientes días de vacaciones disponibles. Disponibles: ${balance.available} días, Solicitados: ${requestedDays} días.`,
+            balance,
+            requestedDays,
+          },
+          { status: 400 }
+        );
+      }
+
     }
 
     // Verify prisma.leaveRequest exists

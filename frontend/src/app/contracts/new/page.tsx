@@ -50,15 +50,18 @@ export default function NewContractPage() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/employees');
+      // Fetch all employees (no pagination needed for dropdown)
+      const response = await fetch('/api/employees?limit=1000');
       if (response.ok) {
         const data = await response.json();
-        setUsers(data);
+        // The API returns { employees: [...], pagination: {...} }
+        const employees = Array.isArray(data.employees) ? data.employees : [];
+        setUsers(employees);
         
         // Check if userId is provided in query params
         const userIdParam = searchParams.get('userId');
-        if (userIdParam) {
-          const selectedUser = data.find((u: User) => u.id === userIdParam);
+        if (userIdParam && employees.length > 0) {
+          const selectedUser = employees.find((u: User) => u.id === userIdParam);
           if (selectedUser) {
             handleUserSelect(userIdParam);
           }
@@ -69,9 +72,12 @@ export default function NewContractPage() {
         }
       } else {
         setError('Error al cargar los empleados');
+        setUsers([]); // Ensure users is always an array
       }
     } catch (err) {
+      console.error('Error fetching users:', err);
       setError('Error al cargar los empleados');
+      setUsers([]); // Ensure users is always an array
     } finally {
       setLoading(false);
     }
@@ -207,7 +213,7 @@ export default function NewContractPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 >
                   <option value="">Seleccionar empleado</option>
-                  {users.map((user) => (
+                  {Array.isArray(users) && users.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name || user.email} {user.position ? `- ${user.position}` : ''}
                     </option>
@@ -277,9 +283,9 @@ export default function NewContractPage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="">Seleccionar tipo</option>
-                    <option value="Permanent">Permanente</option>
-                    <option value="Temporary">Temporal</option>
-                    <option value="Contract">Por Contrato</option>
+                    <option value="Permanent">Trabajador por tiempo indefinido</option>
+                    <option value="Temporary">Trabajador por tiempo definido</option>
+                    <option value="Contract">Prestacion de sercivios</option>
                     <option value="Internship">Pasantía</option>
                   </select>
                 </div>

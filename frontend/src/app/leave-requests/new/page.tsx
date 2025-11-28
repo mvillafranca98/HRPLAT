@@ -10,6 +10,15 @@ export default function NewLeaveRequestPage() {
   const [error, setError] = useState('');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [vacationBalance, setVacationBalance] = useState<{
+    entitlement: number;
+    taken: number;
+    available: number;
+    yearsOfService: number;
+    isInTrialPeriod: boolean;
+    daysUntilEligible: number;
+    nextAnniversary: string | null;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     startDate: '',
@@ -32,11 +41,67 @@ export default function NewLeaveRequestPage() {
     }
   }, []);
 
+  useEffect(() => {
+    async function fetchVacationBalance() {
+      try {
+        const email = localStorage.getItem('userEmail');
+        const role = localStorage.getItem('userRole');
+        
+        if (!email) return;
+
+        const response = await fetch('/api/vacation-balance', {
+          headers: {
+            'x-user-email': email,
+            'x-user-role': role || '',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setVacationBalance({
+            entitlement: data.entitlement,
+            taken: data.taken,
+            available: data.available,
+            yearsOfService: data.yearsOfService,
+            isInTrialPeriod: data.isInTrialPeriod,
+            daysUntilEligible: data.daysUntilEligible,
+            nextAnniversary: data.nextAnniversary,
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching vacation balance:', err);
+      }
+    }
+
+    fetchVacationBalance();
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const calculateRequestedDays = () => {
+    if (!formData.startDate || !formData.endDate) return 0;
+    
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    
+    let days = 0;
+    const current = new Date(start);
+    
+    while (current <= end) {
+      const dayOfWeek = current.getDay();
+      // Count only weekdays (Monday-Friday)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        days++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return days;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -168,6 +233,78 @@ export default function NewLeaveRequestPage() {
                   placeholder="Proporciona detalles adicionales sobre tu solicitud de permiso..."
                 />
               </div>
+
+              {/* Vacation Balance Display */}
+              {formData.type === 'Vacation' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  {vacationBalance ? (
+                    <>
+                      {vacationBalance.isInTrialPeriod ? (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
+                          <p className="text-sm font-medium text-yellow-800">
+                            ⚠️ Período de Prueba
+                          </p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            Todavía estás en período de prueba. Faltan {vacationBalance.daysUntilEligible} días para ser elegible para vacaciones.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="text-sm font-medium text-blue-900 mb-3">
+                            Balance de Vacaciones
+                          </h3>
+                          <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                            <div>
+                              <p className="text-blue-600 text-xs mb-1">Derecho Acumulado</p>
+                              <p className="text-lg font-semibold text-blue-900">
+                                {vacationBalance.entitlement} días
+                              </p>
+                              <p className="text-xs text-blue-500">
+                                Año {vacationBalance.yearsOfService + 1}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-blue-600 text-xs mb-1">Días Tomados</p>
+                              <p className="text-lg font-semibold text-blue-900">
+                                {vacationBalance.taken} días
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-blue-600 text-xs mb-1">Días Disponibles</p>
+                              <p className={`text-lg font-semibold ${
+                                vacationBalance.available > 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {vacationBalance.available} días
+                              </p>
+                            </div>
+                          </div>
+                          {formData.startDate && formData.endDate && (
+                            <div className="pt-3 border-t border-blue-200">
+                              <p className="text-sm text-blue-700">
+                                Días solicitados en esta solicitud: <span className="font-semibold">
+                                  {calculateRequestedDays()} días
+                                </span>
+                                {calculateRequestedDays() > vacationBalance.available && (
+                                  <span className="text-red-600 ml-2 font-semibold">
+                                    ⚠️ Excede días disponibles
+                                  </span>
+                                )}
+                              </p>
+                              {vacationBalance.nextAnniversary && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  Próximo aniversario: {new Date(vacationBalance.nextAnniversary).toLocaleDateString('es-HN')}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-blue-700">Cargando balance de vacaciones...</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

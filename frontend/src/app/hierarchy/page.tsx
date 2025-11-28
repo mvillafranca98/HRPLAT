@@ -162,16 +162,20 @@ export default function HierarchyPage() {
 
   const fetchHierarchy = async () => {
     try {
-      const response = await fetch('/api/employees');
+      // Fetch all employees (no pagination needed for hierarchy)
+      const response = await fetch('/api/employees?limit=1000');
       if (response.ok) {
         const data = await response.json();
-        setEmployees(data);
-        const hierarchyTree = buildTree(data);
+        // The API returns { employees: [...], pagination: {...} }
+        const employees = Array.isArray(data.employees) ? data.employees : [];
+        setEmployees(employees);
+        const hierarchyTree = buildTree(employees);
         setTree(hierarchyTree);
       } else {
         setError('Error al cargar la jerarquía');
       }
     } catch (err) {
+      console.error('Error fetching hierarchy:', err);
       setError('Error al cargar la jerarquía');
     } finally {
       setLoading(false);

@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getRoleDisplayName, canEditUser, getRoleLevel } from '@/lib/roles';
 import ColumnVisibilityToggle from '@/components/ColumnVisibilityToggle';
+import SearchInput from '@/components/SearchInput';
+import SelectDropdown from '@/components/SelectDropdown';
 import { getColumnVisibility } from '@/lib/columnVisibility';
 import { maskPhoneNumber, maskDNI, maskRTN, parsePhoneWithAreaCode, formatPhoneWithAreaCode } from '@/lib/inputMasks';
 
@@ -412,16 +414,14 @@ function EmployeesList() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </div>
-                    <input
+                    <SearchInput
                       ref={searchInputRef}
-                      type="text"
                       id="search"
                       value={searchQuery}
                       onChange={handleSearchChange}
                       onFocus={handleSearchFocus}
                       onBlur={handleSearchBlur}
                       placeholder="Buscar por nombre, email o DNI..."
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
                   </div>
                 </div>
@@ -431,18 +431,18 @@ function EmployeesList() {
                   <label htmlFor="roleFilter" className="block text-sm font-medium text-gray-700 mb-1">
                     Filtrar por Rol
                   </label>
-                  <select
+                  <SelectDropdown
                     id="roleFilter"
                     value={roleFilter}
                     onChange={handleRoleFilterChange}
-                    className="block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  >
-                    <option value="all">Todos los roles</option>
-                    <option value="Admin">Administrador</option>
-                    <option value="HR_Staff">Personal de RRHH</option>
-                    <option value="Management">Gerencia</option>
-                    <option value="employee">Empleado</option>
-                  </select>
+                    options={[
+                      { value: 'all', label: 'Todos los roles' },
+                      { value: 'Admin', label: 'Administrador' },
+                      { value: 'HR_Staff', label: 'Personal de RRHH' },
+                      { value: 'Management', label: 'Gerencia' },
+                      { value: 'employee', label: 'Empleado' },
+                    ]}
+                  />
                 </div>
                 </div>
                 

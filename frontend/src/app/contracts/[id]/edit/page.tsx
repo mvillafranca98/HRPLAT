@@ -289,9 +289,9 @@ export default function EditContractPage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="">Seleccionar tipo</option>
-                    <option value="Permanent">Permanente</option>
-                    <option value="Temporary">Temporal</option>
-                    <option value="Contract">Por Contrato</option>
+                    <option value="Permanent">Trabajador por tiempo indefinido</option>
+                    <option value="Temporary">Trabajador por tiempo definido</option>
+                    <option value="Contract">Prestacion de sercivios</option>
                     <option value="Internship">Pasantía</option>
                   </select>
                 </div>
