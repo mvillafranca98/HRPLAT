@@ -1,0 +1,9 @@
+D3 = user/employee's name
+I3 = User's ID (DNI)
+I4 = Termination Motive (Renuncia, Despido, Termino de Contrato, Despido Justificado, otro)
+E5 = Starting date
+E7 = Termination date
+E11 = Current montly salary
+A25 = Date of user's last anniversary
+C22 = Amount of vacations days remaining to the user
+A26 = Amount of total days the user currently is allowed to take according to seniority (1st year: 10 days (usable after 90-day probation), 2nd year: 12 days, 3rd year: 15 days, 4th and plus (20 days))
