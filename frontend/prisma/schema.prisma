@@ -36,6 +36,8 @@ model User {
   leaveRequests     LeaveRequest[]
   profileImageKey   String?    // S3 key for profile image
   documents         UserDocument[]
+  terminationDate   DateTime?  // Date when employee was terminated
+  terminationReason String?    // "Renuncia", "Despido", "Término de contrato", etc.
 }
 
 enum DocumentType {

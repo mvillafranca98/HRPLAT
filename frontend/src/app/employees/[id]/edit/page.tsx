@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Role, getAssignableRoles, getRoleDisplayName, canEditUser } from '@/lib/roles';
 import { canAccessContracts } from '@/lib/contractAccess';
-import { parsePhoneWithAreaCode, maskPhoneNumber, combinePhoneWithAreaCode, unmask } from '@/lib/inputMasks';
+import { parsePhoneWithAreaCode, maskPhoneNumber, combinePhoneWithAreaCode, unmask, maskDNI, maskRTN } from '@/lib/inputMasks';
 import DocumentManagement from '@/components/DocumentManagement';
 
 interface Employee {
@@ -55,6 +55,11 @@ export default function EditEmployeePage() {
   const [currentEmployeeRole, setCurrentEmployeeRole] = useState<Role | null>(null);
   const [hasEditPermission, setHasEditPermission] = useState(false);
   const [availableManagers, setAvailableManagers] = useState<Employee[]>([]);
+  const [showSeveranceModal, setShowSeveranceModal] = useState(false);
+  const [generatingSeverance, setGeneratingSeverance] = useState(false);
+  const [severanceError, setSeveranceError] = useState('');
+  const [terminationDate, setTerminationDate] = useState('');
+  const [terminationReason, setTerminationReason] = useState('Renuncia');
 
   const fetchAvailableManagers = async () => {
     try {
@@ -163,10 +168,10 @@ export default function EditEmployeePage() {
       setFormData({
         name: employee.name || '',
         email: employee.email || '',
-        dni: employee.dni || '',
-        rtn: employee.rtn || '',
+        dni: maskDNI(employee.dni || ''),  // Apply mask when loading
+        rtn: maskRTN(employee.rtn || ''),  // Apply mask when loading
         phoneAreaCode: parsedPhone.areaCode || '+504',
-        phoneNumber: parsedPhone.phoneNumber || '',
+        phoneNumber: maskPhoneNumber(parsedPhone.phoneNumber || ''),  // Apply mask when loading
         address: employee.address || '',
         startDate: employee.startDate 
           ? new Date(employee.startDate).toISOString().split('T')[0]
@@ -237,6 +242,8 @@ export default function EditEmployeePage() {
         body: JSON.stringify({
           ...formDataToSend,
           phoneNumber: fullPhoneNumber,
+          dni: unmask(formData.dni),  // Remove mask before saving (store raw digits)
+          rtn: unmask(formData.rtn),  // Remove mask before saving (store raw digits)
           startDate: formData.startDate || null,
           reportsToId: formData.reportsToId || null,
           creatorEmail: creatorEmail,
@@ -263,9 +270,21 @@ export default function EditEmployeePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // Apply phone number mask when typing
+    // Apply masks when typing
     if (name === 'phoneNumber') {
       const masked = maskPhoneNumber(value);
+      setFormData({
+        ...formData,
+        [name]: masked,
+      });
+    } else if (name === 'dni') {
+      const masked = maskDNI(value);
+      setFormData({
+        ...formData,
+        [name]: masked,
+      });
+    } else if (name === 'rtn') {
+      const masked = maskRTN(value);
       setFormData({
         ...formData,
         [name]: masked,
@@ -537,6 +556,234 @@ export default function EditEmployeePage() {
               </button>
             </div>
           </form>
+
+          {/* Severance Generation Section - Only for Admin and HR_Staff */}
+          {(userRole === 'Admin' || userRole === 'HR_Staff') && (
+            <div className="mt-8 bg-white shadow rounded-lg p-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Prestaciones Laborales</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Genera el documento de cálculo de prestaciones al terminar la relación laboral
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSeveranceModal(true)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={generatingSeverance}
+                >
+                  {generatingSeverance ? 'Generando...' : 'Generar Prestaciones'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Severance Modal */}
+          {showSeveranceModal && (
+            <div
+              className="fixed inset-0 z-50 overflow-y-auto"
+              aria-labelledby="modal-title"
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40"
+                onClick={() => {
+                  if (!generatingSeverance) {
+                    setShowSeveranceModal(false);
+                  }
+                }}
+              ></div>
+
+              {/* Modal Content */}
+              <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0 relative z-50 pointer-events-none">
+                <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+                  &#8203;
+                </span>
+
+                <div
+                  className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative pointer-events-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div className="sm:flex sm:items-start">
+                      <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                          Generar Cálculo de Prestaciones
+                        </h3>
+                        <div className="mt-4 space-y-4">
+                          <div>
+                            <label htmlFor="terminationDate" className="block text-sm font-medium text-gray-700">
+                              Fecha de Terminación <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              id="terminationDate"
+                              value={terminationDate}
+                              onChange={(e) => setTerminationDate(e.target.value)}
+                              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
+                              disabled={generatingSeverance}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="terminationReason" className="block text-sm font-medium text-gray-700">
+                              Motivo de Terminación <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              id="terminationReason"
+                              value={terminationReason}
+                              onChange={(e) => setTerminationReason(e.target.value)}
+                              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
+                              disabled={generatingSeverance}
+                            >
+                              <option value="Renuncia">Renuncia</option>
+                              <option value="Despido">Despido</option>
+                              <option value="Término de contrato">Término de contrato</option>
+                              <option value="Despido justificado">Despido justificado</option>
+                              <option value="Otro">Otro</option>
+                            </select>
+                          </div>
+                          {severanceError && (
+                            <div className="rounded-md bg-red-50 p-4">
+                              <div className="text-sm text-red-800">{severanceError}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!terminationDate) {
+                          setSeveranceError('La fecha de terminación es requerida');
+                          return;
+                        }
+
+                        setGeneratingSeverance(true);
+                        setSeveranceError('');
+
+                        try {
+                          const userEmail = localStorage.getItem('userEmail') || '';
+                          const userRole = localStorage.getItem('userRole') || '';
+
+                          const response = await fetch(`/api/employees/${employeeId}/severance`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'x-user-email': userEmail,
+                              'x-user-role': userRole,
+                            },
+                            body: JSON.stringify({
+                              terminationDate,
+                              terminationReason,
+                            }),
+                          });
+
+                          if (response.ok) {
+                            // Check if response is actually an Excel file
+                            const contentType = response.headers.get('content-type');
+                            if (!contentType || !contentType.includes('spreadsheet')) {
+                              // Not an Excel file - might be an error JSON
+                              const errorText = await response.text();
+                              let errorData;
+                              try {
+                                errorData = JSON.parse(errorText);
+                              } catch (e) {
+                                setSeveranceError(`Error inesperado: ${errorText}`);
+                                return;
+                              }
+                              setSeveranceError(errorData.error || errorData.message || 'Error al generar el documento');
+                              return;
+                            }
+                            
+                            // Download the Excel file
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            
+                            // Get filename from Content-Disposition header or use default
+                            const contentDisposition = response.headers.get('content-disposition');
+                            let fileName = `prestaciones_${employeeId}_${terminationDate}.xlsx`;
+                            if (contentDisposition) {
+                              const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+                              if (fileNameMatch) {
+                                fileName = fileNameMatch[1];
+                              }
+                            }
+                            
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+
+                            // Close modal
+                            setShowSeveranceModal(false);
+                            setTerminationDate('');
+                            setTerminationReason('Renuncia');
+                          } else {
+                            // Handle error response - read as text first
+                            const responseText = await response.text();
+                            console.error('Error response status:', response.status);
+                            console.error('Error response text:', responseText);
+                            
+                            let errorMessage = 'Error al generar el documento de prestaciones';
+                            
+                            if (responseText && responseText.trim() !== '') {
+                              try {
+                                const errorData = JSON.parse(responseText);
+                                errorMessage = errorData.error || errorData.message || errorMessage;
+                                if (errorData.details) {
+                                  errorMessage += `: ${errorData.details}`;
+                                }
+                                console.error('Parsed error data:', errorData);
+                              } catch (jsonError) {
+                                // If it's not JSON, use the text as error message
+                                console.error('Failed to parse JSON error:', jsonError);
+                                errorMessage = responseText.length > 200 
+                                  ? `${errorMessage}: ${responseText.substring(0, 200)}...`
+                                  : `${errorMessage}: ${responseText}`;
+                              }
+                            } else {
+                              errorMessage = `${errorMessage} (Status: ${response.status})`;
+                            }
+                            
+                            setSeveranceError(errorMessage);
+                          }
+                        } catch (err: any) {
+                          console.error('Error generating severance:', err);
+                          setSeveranceError(err.message || 'Error al generar el documento de prestaciones. Por favor revisa la consola para más detalles.');
+                        } finally {
+                          setGeneratingSeverance(false);
+                        }
+                      }}
+                      disabled={generatingSeverance || !terminationDate}
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {generatingSeverance ? 'Generando...' : 'Generar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSeveranceModal(false);
+                        setTerminationDate('');
+                        setTerminationReason('Renuncia');
+                        setSeveranceError('');
+                      }}
+                      disabled={generatingSeverance}
+                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Document Management Section */}
           <div className="mt-8 bg-white shadow rounded-lg p-6">
