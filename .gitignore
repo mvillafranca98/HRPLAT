@@ -10,7 +10,10 @@ __pycache__/
 node_modules/
 .next/
 out/
-.env*.local
+.env*
+.env.local
+.env.production
+.env.development
 
 # IDE
 .vscode/
@@ -29,3 +32,4 @@ npm-debug.log*
 # Build
 dist/
 build/
+*.db
