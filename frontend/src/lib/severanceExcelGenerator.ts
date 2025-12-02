@@ -7,7 +7,9 @@
 import ExcelJS from 'exceljs';
 import path from 'path';
 import fs from 'fs';
+import AdmZip from 'adm-zip';
 import { SeveranceData, SeveranceBenefits, calculateSeveranceBenefits } from './severanceCalculation';
+import { maskDNI } from './inputMasks';
 
 /**
  * Generate severance Excel file from template
@@ -32,6 +34,26 @@ export async function generateSeveranceExcel(
     throw new Error('Worksheet not found in template');
   }
   
+  // Log worksheet info for debugging
+  console.log(`Working with worksheet: "${worksheet.name}", ${worksheet.rowCount} rows`);
+  
+  // Function to get cell value from worksheet for debugging
+  const debugCell = (addr: string) => {
+    const cell = worksheet.getCell(addr);
+    return {
+      address: addr,
+      value: cell.value,
+      formula: cell.formula || null,
+      text: cell.text || null,
+      type: (cell as any).type || 'unknown',
+    };
+  };
+  
+  console.log('Template cells before modification:');
+  console.log('D3:', debugCell('D3'));
+  console.log('I3:', debugCell('I3'));
+  console.log('E5:', debugCell('E5'));
+  
   // Calculate all benefits
   const benefits = calculateSeveranceBenefits(severanceData);
   
@@ -45,13 +67,127 @@ export async function generateSeveranceExcel(
     return `${day}-${month}-${year}`;
   };
   
-  // Format date for Excel (numeric date value)
-  const formatDateForExcel = (date: Date): number => {
-    // Excel stores dates as numbers (days since Jan 1, 1900)
-    const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
-    const diffTime = date.getTime() - excelEpoch.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  // Helper function to safely set cell value, completely removing formulas
+  // Uses direct row/cell manipulation to ensure formulas are completely replaced
+  const setCellValue = (cellAddress: string, value: any, numFmt?: string): void => {
+    try {
+      // Convert cell address to row and column numbers
+      const match = cellAddress.match(/^([A-Z]+)(\d+)$/);
+      if (!match) {
+        throw new Error(`Invalid cell address: ${cellAddress}`);
+      }
+      
+      const colLetter = match[1];
+      const rowNum = parseInt(match[2], 10);
+      
+      // Convert column letter to number
+      let colNum = 0;
+      for (let i = 0; i < colLetter.length; i++) {
+        colNum = colNum * 26 + (colLetter.charCodeAt(i) - 64);
+      }
+      
+      // Get the row directly
+      const row = worksheet.getRow(rowNum);
+      
+      // Get the cell - this gives us direct access
+      const cell = row.getCell(colNum);
+      
+      console.log(`Setting ${cellAddress} (row ${rowNum}, col ${colNum}) = "${value}"`);
+      
+      // Check for formula first
+      if (cell.formula) {
+        console.log(`  ⚠️  Formula detected: "${cell.formula}"`);
+      }
+      
+      // CRITICAL: Completely remove formula BEFORE setting value
+      // ExcelJS stores formulas in the XML model, we need to remove them first
+      const wsModel = (worksheet as any).model;
+      
+      // Step 1: Remove formula from worksheet XML model FIRST (before setting value)
+      if (wsModel && wsModel.rows) {
+        const rowModel = wsModel.rows[rowNum - 1];
+        if (rowModel && rowModel.cells) {
+          const xmlCell = rowModel.cells[colNum - 1];
+          if (xmlCell) {
+            // Remove ALL formula-related properties from XML
+            if (xmlCell.f !== undefined) {
+              console.log(`  Removing formula 'f' from XML for ${cellAddress}`);
+              delete xmlCell.f;
+            }
+            // Change cell type from formula ('e') to value type
+            if (xmlCell.t === 'e') {
+              const newType = typeof value === 'number' ? 'n' : (typeof value === 'string' ? 'inlineStr' : 'n');
+              xmlCell.t = newType;
+              console.log(`  Changed XML cell type from 'e' (formula) to '${newType}' for ${cellAddress}`);
+            }
+            // Remove result property if it exists
+            if (xmlCell.result !== undefined) delete xmlCell.result;
+          }
+        }
+      }
+      
+      // Step 2: Remove formula from cell model
+      const cellModel = (cell as any).model;
+      if (cellModel) {
+        if (cellModel.f !== undefined) delete cellModel.f;
+        if (cellModel.formula !== undefined) delete cellModel.formula;
+        if (cellModel.result !== undefined) delete cellModel.result;
+        if (cellModel.t === 'e') {
+          cellModel.t = typeof value === 'number' ? 'n' : 'inlineStr';
+        }
+      }
+      
+      // Step 3: Now set the value - this creates a value cell, not formula
+      const targetCell = row.getCell(colNum);
+      targetCell.value = value;
+      
+      // Step 4: Force update the XML model to ensure value is stored
+      if (wsModel && wsModel.rows) {
+        const rowModel = wsModel.rows[rowNum - 1];
+        if (rowModel && rowModel.cells) {
+          const xmlCell = rowModel.cells[colNum - 1];
+          if (xmlCell) {
+            // Ensure value is in XML model
+            xmlCell.v = value;
+            // Ensure type is correct (not formula)
+            if (xmlCell.t === undefined || xmlCell.t === 'e') {
+              xmlCell.t = typeof value === 'number' ? 'n' : 'inlineStr';
+            }
+            // Double-check formula is removed
+            if (xmlCell.f !== undefined) {
+              console.error(`  ERROR: Formula 'f' still exists in XML for ${cellAddress} after cleanup!`);
+              delete xmlCell.f;
+            }
+          }
+        }
+      }
+      
+      // Set number format if specified
+      if (numFmt) {
+        row.getCell(colNum).numFmt = numFmt;
+      }
+      
+      // Verify it was set correctly
+      const verifyCell = worksheet.getCell(cellAddress);
+      
+      if (verifyCell.formula) {
+        console.error(`  ❌ FAILED: Formula still exists!`);
+        console.error(`     Formula: "${verifyCell.formula}"`);
+        console.error(`     This means Excel will show formula result, not your value!`);
+      } else {
+        const actualValue = verifyCell.value;
+        console.log(`  ✓ Set: ${cellAddress} = "${actualValue}"`);
+        
+        // Double-check the value matches what we set
+        if (actualValue !== value && String(actualValue) !== String(value)) {
+          console.warn(`  ⚠️  Value mismatch: expected "${value}", got "${actualValue}"`);
+        }
+      }
+      
+    } catch (error: any) {
+      console.error(`❌ Error setting cell ${cellAddress}:`, error.message);
+      console.error(error);
+    }
   };
   
   const dailySalary = severanceData.dailySalary;
@@ -60,60 +196,72 @@ export async function generateSeveranceExcel(
   const startDateStr = formatDate(severanceData.startDate);
   
   // ===== BASIC EMPLOYEE INFORMATION =====
-  // D3 = Employee name
-  worksheet.getCell('D3').value = severanceData.employeeName;
+  // Format DNI with hyphens (XXXX-XXXX-XXXXX)
+  const formattedDNI = severanceData.dni ? maskDNI(severanceData.dni) : '';
   
-  // I3 = DNI (User's ID)
-  worksheet.getCell('I3').value = severanceData.dni || '';
+  console.log('Populating employee information:');
+  console.log('- Employee name:', severanceData.employeeName);
+  console.log('- DNI (formatted):', formattedDNI);
+  console.log('- Termination reason:', severanceData.terminationReason);
+  console.log('- Start date:', startDateStr);
+  console.log('- Termination date:', termDateStr);
+  
+  // D3 = Employee name
+  setCellValue('D3', severanceData.employeeName, '@');
+  
+  // I3 = DNI (User's ID) - formatted with hyphens
+  setCellValue('I3', formattedDNI, '@');
   
   // I4 = Termination reason
-  worksheet.getCell('I4').value = severanceData.terminationReason || 'Renuncia';
+  setCellValue('I4', severanceData.terminationReason || 'Renuncia', '@');
   
   // E5 = Starting date
-  worksheet.getCell('E5').value = startDateStr;
+  setCellValue('E5', startDateStr, '@');
   
   // E7 = Termination date
-  worksheet.getCell('E7').value = termDateStr;
+  setCellValue('E7', termDateStr, '@');
+  
+  console.log('Employee information populated successfully');
   
   // ===== ANTIGÜEDAD (SENIORITY) - Row 9 =====
   // C9 = Years
-  worksheet.getCell('C9').value = severanceData.yearsOfService;
+  setCellValue('C9', severanceData.yearsOfService);
   // E9 = "AÑOS" (text, should already be in template)
   // G9 = Months
-  worksheet.getCell('G9').value = severanceData.monthsOfService;
+  setCellValue('G9', severanceData.monthsOfService);
   // I9 = "MESES" (text, should already be in template)
   // For days, we need to check the template structure - likely in column K or similar
   // Based on CSV, it shows "4,DIAS" - let's use column K for days
-  worksheet.getCell('K9').value = severanceData.daysOfService;
+  setCellValue('K9', severanceData.daysOfService);
   
   // ===== SALARY INFORMATION =====
-  // E11 = Current monthly salary (average)
-  worksheet.getCell('E11').value = avgSalary;
+  // E11 = Current monthly salary (average) - SPECIFICATION
+  setCellValue('E11', avgSalary);
   
   // E13 = Average monthly salary (duplicate)
-  worksheet.getCell('E13').value = avgSalary;
+  setCellValue('E13', avgSalary);
   
   // I13 = Daily salary
-  worksheet.getCell('I13').value = dailySalary;
+  setCellValue('I13', dailySalary);
   
   // ===== VACATION INFORMATION =====
-  // C22 = Vacation days remaining
-  worksheet.getCell('C22').value = severanceData.vacationDaysRemaining;
+  // C22 = Vacation days remaining - SPECIFICATION
+  setCellValue('C22', severanceData.vacationDaysRemaining);
   
-  // A25 = Last anniversary date
-  worksheet.getCell('A25').value = formatDate(severanceData.lastAnniversaryDate);
+  // A25 = Last anniversary date - SPECIFICATION
+  setCellValue('A25', formatDate(severanceData.lastAnniversaryDate), '@');
   
-  // A26 = Vacation entitlement (total days allowed according to seniority)
-  worksheet.getCell('A26').value = severanceData.vacationDaysEntitlement;
+  // A26 = Vacation entitlement (total days allowed according to seniority) - SPECIFICATION
+  setCellValue('A26', severanceData.vacationDaysEntitlement);
   
   // B25 = Termination date (for vacation calculation period)
-  worksheet.getCell('B25').value = termDateStr;
+  setCellValue('B25', termDateStr, '@');
   
   // C26 = Days from anniversary to termination
   const daysFromAnniversary = Math.floor(
     (severanceData.terminationDate.getTime() - severanceData.lastAnniversaryDate.getTime()) / (1000 * 60 * 60 * 24)
   );
-  worksheet.getCell('C26').value = daysFromAnniversary;
+  setCellValue('C26', daysFromAnniversary);
   
   // ===== PREAVISO (NOTICE PAY) - Row 16 =====
   worksheet.getCell('C16').value = severanceData.noticeDays;
@@ -200,7 +348,204 @@ export async function generateSeveranceExcel(
   // E66 = Average monthly salary
   worksheet.getCell('E66').value = avgSalary;
   
-  return workbook;
+  // Final cleanup: Remove formulas ONLY from cells we're replacing
+  // This preserves all other formulas in the template (calculations, etc.)
+  console.log('\n=== FINAL CLEANUP: Removing formulas from target cells only ===');
+  const criticalCells = ['D3', 'I3', 'I4', 'E5', 'E7', 'E11', 'A25', 'C22', 'A26'];
+  
+  // Access the worksheet model directly to remove formulas from XML
+  const wsModel = (worksheet as any).model;
+  
+  if (wsModel && wsModel.rows) {
+    console.log('Accessing worksheet model to remove formulas from XML structure...');
+    
+    for (const cellAddr of criticalCells) {
+      const cell = worksheet.getCell(cellAddr);
+      const rowNum = cell.row.number;
+      const colNum = cell.col.number;
+      
+      // Access row model
+      const rowModel = wsModel.rows[rowNum - 1]; // Rows are 0-indexed in model
+      
+      if (rowModel && rowModel.cells) {
+        // Access cell model directly
+        const cellModel = rowModel.cells[colNum - 1]; // Columns are 0-indexed in model
+        
+        if (cellModel) {
+          // Force remove formula properties from XML model
+          if (cellModel.f) { // 'f' is formula in Excel XML
+            console.log(`Removing formula 'f' property from ${cellAddr}`);
+            delete cellModel.f;
+          }
+          if (cellModel.formula) {
+            console.log(`Removing formula property from ${cellAddr}`);
+            delete cellModel.formula;
+          }
+          if (cellModel.t === 'e' || cellModel.t === 'str') { // 'e' = formula, 'str' = string
+            // Change type to 'inlineStr' or 'n' (number) or 's' (shared string)
+            cellModel.t = 'inlineStr'; // Force it to be a string value
+            console.log(`Changed cell type for ${cellAddr}`);
+          }
+          
+          // Ensure the value is set in the model
+          if (cell.value !== null && cell.value !== undefined) {
+            cellModel.v = cell.value; // 'v' is the value in Excel XML
+            if (cellModel.t === undefined || cellModel.t === 'e') {
+              cellModel.t = typeof cell.value === 'number' ? 'n' : 'inlineStr';
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Final verification: Check what will actually be written to Excel
+  console.log('\n' + '='.repeat(60));
+  console.log('FINAL VERIFICATION - What will be written to Excel file:');
+  console.log('='.repeat(60));
+  
+  for (const cellAddr of criticalCells) {
+    const cell = worksheet.getCell(cellAddr);
+    const hasFormula = !!cell.formula;
+    const value = cell.value;
+    
+    if (hasFormula) {
+      console.error(`❌ ${cellAddr}: STILL HAS FORMULA "${cell.formula}" - VALUE WILL BE IGNORED!`);
+      console.error(`   Current value: "${value}"`);
+    } else {
+      console.log(`✓ ${cellAddr}: "${value}"`);
+    }
+  }
+  
+  console.log('='.repeat(60));
+  console.log('Note: Only formulas in the cells listed above are removed.');
+  console.log('All other formulas in the template are preserved.\n');
+  
+  // FINAL STEP: Write to buffer, then selectively remove formulas only from target cells
+  // Only remove formulas from cells we're replacing, preserve all other formulas
+  console.log('Writing workbook to buffer...');
+  const buffer = await workbook.xlsx.writeBuffer();
+  
+  // List of cells where we want to remove formulas (only these cells)
+  const cellsToReplace = ['D3', 'I3', 'I4', 'E5', 'E7', 'E11', 'A25', 'C22', 'A26'];
+  
+  // Helper function to convert cell address (e.g., "D3") to row number and column letter
+  const parseCellAddress = (address: string): { row: number; col: string } => {
+    const match = address.match(/^([A-Z]+)(\d+)$/);
+    if (!match) throw new Error(`Invalid cell address: ${address}`);
+    return { row: parseInt(match[2], 10), col: match[1] };
+  };
+  
+  // Convert cell addresses to row/column format
+  const targetCells = cellsToReplace.map(addr => parseCellAddress(addr));
+  
+  // Helper function to convert column letter to Excel XML column number (1-based)
+  const colLetterToNum = (col: string): number => {
+    let num = 0;
+    for (let i = 0; i < col.length; i++) {
+      num = num * 26 + (col.charCodeAt(i) - 64);
+    }
+    return num;
+  };
+  
+  // Convert our target cells to Excel XML format (row="3" r="D3")
+  const targetCellRefs = new Set(targetCells.map(cell => {
+    const colNum = colLetterToNum(cell.col);
+    return { row: cell.row, col: cell.col, colNum, ref: `${cell.col}${cell.row}` };
+  }));
+  
+  console.log(`Will only remove formulas from these cells: ${cellsToReplace.join(', ')}`);
+  console.log('All other formulas will be preserved.');
+  
+  // Use adm-zip to extract, modify XML, and repackage
+  console.log('Selectively removing formulas from Excel XML structure...');
+  const zip = new AdmZip(buffer);
+  
+  // Find all worksheet XML files
+  const zipEntries = zip.getEntries();
+  const worksheetEntries = zipEntries.filter(entry => 
+    entry.entryName.startsWith('xl/worksheets/') && 
+    entry.entryName.endsWith('.xml') &&
+    !entry.entryName.includes('_rels')
+  );
+  
+  console.log(`Found ${worksheetEntries.length} worksheet(s) to process`);
+  
+  // Process each worksheet XML
+  for (const entry of worksheetEntries) {
+    try {
+      let xmlContent = entry.getData().toString('utf8');
+      let formulaCount = 0;
+      
+      // Parse XML to find cell elements and only remove formulas from target cells
+      // Excel XML format: <c r="D3" ...><f>FORMULA</f><v>VALUE</v></c>
+      
+      // Use a more comprehensive regex to match all cell elements
+      // Match: <c ... r="CELLREF" ...>...</c> or cells without r attribute (we'll handle those separately)
+      xmlContent = xmlContent.replace(
+        /<c(\s+[^>]*r="([A-Z]+\d+)"[^>]*)>(.*?)<\/c>/gis,
+        (match, attrs, cellRef, cellContent) => {
+          // Check if this cell is in our target list
+          const isTargetCell = Array.from(targetCellRefs).some(t => t.ref === cellRef);
+          
+          if (isTargetCell && (cellContent.includes('<f') || attrs.includes('t="e"'))) {
+            // This is a target cell with a formula - remove the formula
+            formulaCount++;
+            
+            // Remove formula tags: <f>...</f> or <f .../>
+            let cleanedContent = cellContent.replace(/<f[^>]*\/\s*>/gi, '');
+            cleanedContent = cleanedContent.replace(/<f[^>]*>.*?<\/f>/gis, '');
+            
+            // Remove formula type attribute if present (t="e" means formula/expression type)
+            let cleanedAttrs = attrs.replace(/\s+t="e"/gi, '');
+            cleanedAttrs = cleanedAttrs.replace(/\s+t='e'/gi, '');
+            
+            console.log(`  ✓ Removed formula from cell ${cellRef}`);
+            
+            return `<c${cleanedAttrs}>${cleanedContent}</c>`;
+          }
+          
+          // Not a target cell or doesn't have formula - keep as is
+          return match;
+        }
+      );
+      
+      if (formulaCount > 0) {
+        console.log(`  ✓ Removed ${formulaCount} formula(s) from target cells in ${entry.entryName}`);
+        
+        // Update the zip entry with cleaned XML
+        zip.updateFile(entry, Buffer.from(xmlContent, 'utf8'));
+      } else {
+        console.log(`  ✓ No formulas to remove in target cells for ${entry.entryName}`);
+      }
+    } catch (error: any) {
+      console.error(`  ⚠️  Error processing ${entry.entryName}:`, error.message);
+      console.error(error);
+    }
+  }
+  
+  // Create a new workbook from the cleaned zip buffer
+  const cleanedBuffer = zip.toBuffer();
+  
+  // Read the cleaned workbook back
+  const cleanWorkbook = new ExcelJS.Workbook();
+  await cleanWorkbook.xlsx.load(cleanedBuffer);
+  
+  // Verify critical cells one more time
+  const cleanWorksheet = cleanWorkbook.getWorksheet(1);
+  if (cleanWorksheet) {
+    console.log('\nFinal verification after XML cleanup:');
+    for (const cellAddr of criticalCells) {
+      const cleanCell = cleanWorksheet.getCell(cellAddr);
+      if (cleanCell.formula) {
+        console.error(`  ⚠️  ${cellAddr} STILL has formula: "${cleanCell.formula}"`);
+      } else {
+        console.log(`  ✓ ${cellAddr}: "${cleanCell.value}"`);
+      }
+    }
+  }
+  
+  return cleanWorkbook;
 }
 
 /**

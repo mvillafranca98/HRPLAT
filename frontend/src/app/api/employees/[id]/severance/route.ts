@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generateSeveranceExcel, getTemplatePath } from '@/lib/severanceExcelGenerator';
+import { generateSeveranceExcel, getTemplatePath } from '@/lib/severanceExcelGeneratorSimplified';
 import {
   SeveranceData,
   calculateServicePeriod,
@@ -39,7 +39,38 @@ export async function POST(
       );
     }
     
-    const termDate = new Date(terminationDate);
+    // Parse date correctly - handle both ISO format (YYYY-MM-DD) and dd/mm/yyyy format
+    // HTML5 date inputs send ISO format (YYYY-MM-DD), but we also handle dd/mm/yyyy for safety
+    let termDate: Date;
+    if (terminationDate.includes('/')) {
+      // Handle dd/mm/yyyy format (day/month/year)
+      const parts = terminationDate.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed in JavaScript
+        const year = parseInt(parts[2], 10);
+        termDate = new Date(year, month, day);
+        console.log(`Parsed date from dd/mm/yyyy: "${terminationDate}" -> ${termDate.toISOString()} (${day}/${month + 1}/${year})`);
+      } else {
+        termDate = new Date(terminationDate);
+      }
+    } else {
+      // ISO format (YYYY-MM-DD) - parse directly
+      // This is what HTML5 date inputs send
+      termDate = new Date(terminationDate);
+      console.log(`Parsed date from ISO: "${terminationDate}" -> ${termDate.toISOString()}`);
+    }
+    
+    // Validate the date
+    if (isNaN(termDate.getTime())) {
+      return NextResponse.json(
+        { error: 'La fecha de terminación no es válida' },
+        { status: 400 }
+      );
+    }
+    
+    // Log the final parsed date for debugging
+    console.log(`Termination date parsed: ${termDate.toLocaleDateString('es-HN', { day: '2-digit', month: '2-digit', year: 'numeric' })} (${termDate.getDate()}/${termDate.getMonth() + 1}/${termDate.getFullYear()})`);
     
     // Fetch employee data
     const employee = await prisma.user.findUnique({

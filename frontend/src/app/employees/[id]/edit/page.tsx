@@ -57,6 +57,7 @@ export default function EditEmployeePage() {
   const [availableManagers, setAvailableManagers] = useState<Employee[]>([]);
   const [showSeveranceModal, setShowSeveranceModal] = useState(false);
   const [generatingSeverance, setGeneratingSeverance] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [severanceError, setSeveranceError] = useState('');
   const [terminationDate, setTerminationDate] = useState('');
   const [terminationReason, setTerminationReason] = useState('Renuncia');
@@ -764,7 +765,102 @@ export default function EditEmployeePage() {
                       disabled={generatingSeverance || !terminationDate}
                       className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {generatingSeverance ? 'Generando...' : 'Generar'}
+                      {generatingSeverance ? 'Generando...' : 'Generar Excel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!terminationDate) {
+                          setSeveranceError('La fecha de terminación es requerida');
+                          return;
+                        }
+                        
+                        setGeneratingPDF(true);
+                        setSeveranceError('');
+                        
+                        try {
+                          const response = await fetch(`/api/employees/${employeeId}/severance-pdf`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'x-user-email': userEmail || '',
+                              'x-user-role': userRole || '',
+                            },
+                            body: JSON.stringify({
+                              terminationDate,
+                              terminationReason,
+                            }),
+                          });
+                          
+                          if (response.ok) {
+                            const contentType = response.headers.get('content-type');
+                            if (!contentType || !contentType.includes('pdf')) {
+                              const errorText = await response.text();
+                              let errorData;
+                              try {
+                                errorData = JSON.parse(errorText);
+                              } catch (e) {
+                                setSeveranceError(`Error inesperado: ${errorText}`);
+                                return;
+                              }
+                              setSeveranceError(errorData.error || errorData.message || 'Error al generar el PDF');
+                              return;
+                            }
+                            
+                            // Download the PDF file
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            
+                            // Get filename from Content-Disposition header or use default
+                            const contentDisposition = response.headers.get('content-disposition');
+                            let fileName = `prestaciones_${employeeId}_${terminationDate}.pdf`;
+                            if (contentDisposition) {
+                              const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+                              if (fileNameMatch) {
+                                fileName = fileNameMatch[1];
+                              }
+                            }
+                            
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                          } else {
+                            const responseText = await response.text();
+                            let errorMessage = 'Error al generar el PDF de prestaciones';
+                            
+                            if (responseText && responseText.trim() !== '') {
+                              try {
+                                const errorData = JSON.parse(responseText);
+                                errorMessage = errorData.error || errorData.message || errorMessage;
+                                if (errorData.details) {
+                                  errorMessage += `: ${errorData.details}`;
+                                }
+                              } catch (jsonError) {
+                                errorMessage = responseText.length > 200 
+                                  ? `${errorMessage}: ${responseText.substring(0, 200)}...`
+                                  : `${errorMessage}: ${responseText}`;
+                              }
+                            } else {
+                              errorMessage = `${errorMessage} (Status: ${response.status})`;
+                            }
+                            
+                            setSeveranceError(errorMessage);
+                          }
+                        } catch (err: any) {
+                          console.error('Error generating PDF:', err);
+                          setSeveranceError(err.message || 'Error al generar el PDF de prestaciones.');
+                        } finally {
+                          setGeneratingPDF(false);
+                        }
+                      }}
+                      disabled={generatingPDF || generatingSeverance || !terminationDate}
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {generatingPDF ? 'Generando PDF...' : 'Descargar PDF'}
                     </button>
                     <button
                       type="button"
@@ -774,7 +870,7 @@ export default function EditEmployeePage() {
                         setTerminationReason('Renuncia');
                         setSeveranceError('');
                       }}
-                      disabled={generatingSeverance}
+                      disabled={generatingSeverance || generatingPDF}
                       className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Cancelar
