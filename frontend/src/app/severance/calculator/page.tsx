@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   calculatePreavisoDays,
+  calculateRequiredPreavisoDays,
+  calculateTerminationDateFromPreaviso,
   calculateProportionalVacationDaysForm,
   getLastJuly1st,
   calculateThirteenthMonthDays,
@@ -156,6 +158,35 @@ export default function SeveranceCalculator() {
         const data = await response.json();
         const selectedEmployee = employees.find(e => e.id === employeeId);
         
+        // Calculate required preaviso days based on service period
+        const requiredPreavisoDays = data.startDate 
+          ? calculateRequiredPreavisoDays(data.startDate)
+          : 0;
+        
+        // Calculate termination date (current date + preaviso days)
+        const terminationDate = requiredPreavisoDays > 0
+          ? calculateTerminationDateFromPreaviso(requiredPreavisoDays)
+          : new Date();
+        
+        const terminationDateStr = formatDateForInput(terminationDate);
+        
+        // Calculate 13th Month dates
+        // Start date: Last July 1st before or on termination date (most recent July 1st)
+        const lastJuly1st = getLastJuly1st(terminationDateStr);
+        const thirteenthMonthStartDateStr = formatDateForInput(lastJuly1st);
+        const thirteenthMonthDays = calculateThirteenthMonthDays(
+          lastJuly1st,
+          terminationDateStr
+        );
+        
+        // Calculate 14th Month dates
+        const fourteenthMonthStart = getJanuary1stOfYear(terminationDateStr);
+        const fourteenthMonthStartDateStr = formatDateForInput(fourteenthMonthStart);
+        const fourteenthMonthDays = calculateFourteenthMonthDays(
+          fourteenthMonthStart,
+          terminationDateStr
+        );
+        
         // Auto-fill form with employee data
         setFormData(prev => ({
           ...prev,
@@ -166,6 +197,16 @@ export default function SeveranceCalculator() {
           vacationDaysRemaining: data.vacationDaysRemaining || 0,
           vacationDaysEntitlement: data.vacationDaysEntitlement || 0,
           salaryHistory: data.salaryHistory || [],
+          preavisoDays: requiredPreavisoDays,
+          terminationDate: terminationDateStr,
+          // Set proportional vacation days = remaining vacation days / 12
+          vacationProportionalDays: data.vacationDaysRemaining ? (data.vacationDaysRemaining / 12) : 0,
+          // 13th Month calculations
+          thirteenthMonthStartDate: thirteenthMonthStartDateStr,
+          thirteenthMonthDays,
+          // 14th Month calculations
+          fourteenthMonthStartDate: fourteenthMonthStartDateStr,
+          fourteenthMonthDays,
         }));
       } else {
         const errorData = await response.json();
@@ -190,30 +231,51 @@ export default function SeveranceCalculator() {
     );
   });
 
+  // Auto-calculate preaviso days and termination date when start date changes
+  useEffect(() => {
+    if (!formData.startDate) return;
+
+    // Calculate required preaviso days based on service period
+    const requiredPreavisoDays = calculateRequiredPreavisoDays(formData.startDate);
+    
+    // Calculate termination date (current date + preaviso days)
+    const terminationDate = requiredPreavisoDays > 0
+      ? calculateTerminationDateFromPreaviso(requiredPreavisoDays)
+      : new Date();
+    
+    setFormData(prev => ({
+      ...prev,
+      preavisoDays: requiredPreavisoDays,
+      terminationDate: formatDateForInput(terminationDate),
+    }));
+  }, [formData.startDate]);
+
+  // Update proportional vacation days when remaining vacation days change
+  // Formula: vacationDaysRemaining / 12
+  useEffect(() => {
+    setFormData(prev => ({ 
+      ...prev, 
+      vacationProportionalDays: prev.vacationDaysRemaining ? (prev.vacationDaysRemaining / 12) : 0
+    }));
+  }, [formData.vacationDaysRemaining]);
+
   // Auto-calculate fields when termination date or related fields change
   useEffect(() => {
     if (!formData.terminationDate) return;
 
-    // Calculate Preaviso Days (days from today to termination date)
-    const preavisoDays = calculatePreavisoDays(formData.terminationDate);
-    setFormData(prev => ({ ...prev, preavisoDays }));
-
-    // Calculate Proportional Vacation Days
-    if (formData.lastAnniversaryDate && formData.vacationDaysEntitlement > 0) {
-      const proportionalVacationDays = calculateProportionalVacationDaysForm(
-        formData.lastAnniversaryDate,
-        formData.terminationDate,
-        formData.vacationDaysEntitlement
-      );
-      setFormData(prev => ({ ...prev, vacationProportionalDays: proportionalVacationDays }));
+    // Calculate Preaviso Days - Always use required preaviso days based on service period
+    // (not calculated from termination date)
+    if (formData.startDate) {
+      const requiredPreavisoDays = calculateRequiredPreavisoDays(formData.startDate);
+      setFormData(prev => ({ ...prev, preavisoDays: requiredPreavisoDays }));
     }
 
     // Calculate 13th Month (Décimo Tercer Mes)
-    // Start date: Last July 1st before or on termination date
-    const thirteenthMonthStart = getLastJuly1st(formData.terminationDate);
-    const thirteenthMonthStartDateStr = formatDateForInput(thirteenthMonthStart);
+    // Start date: Last July 1st before or on termination date (most recent July 1st)
+    const lastJuly1st = getLastJuly1st(formData.terminationDate);
+    const thirteenthMonthStartDateStr = formatDateForInput(lastJuly1st);
     const thirteenthMonthDays = calculateThirteenthMonthDays(
-      thirteenthMonthStart,
+      lastJuly1st,
       formData.terminationDate
     );
     setFormData(prev => ({
@@ -237,8 +299,7 @@ export default function SeveranceCalculator() {
     }));
   }, [
     formData.terminationDate,
-    formData.lastAnniversaryDate,
-    formData.vacationDaysEntitlement,
+    formData.startDate,
   ]);
 
   const addSalaryMonth = () => {
@@ -710,7 +771,7 @@ export default function SeveranceCalculator() {
                     min="0"
                     step="0.01"
                   />
-                  <p className="mt-1 text-xs text-gray-500">ROUND((días desde aniversario) × (derecho total) / 360, 2)</p>
+                  <p className="mt-1 text-xs text-gray-500">Días de vacaciones restantes / 12</p>
                 </div>
                 <div>
                   <label htmlFor="thirteenthMonthDays" className="block text-sm font-medium text-gray-700">
