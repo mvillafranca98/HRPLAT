@@ -1,6 +1,6 @@
 /**
  * PDF Generation Utility for Severance Documents - Form-Based
- * Matches the RRHH.csv layout structure exactly with proper column spacing
+ * Clean, readable layout with proper spacing and alignment
  * Uses pdf-lib which doesn't require external font files
  */
 
@@ -117,9 +117,9 @@ function calculateSalaryAverages(salaryHistory: Array<{ amount: number; overtime
       baseMonthly: 0,
       baseAverage: 0,
       basePromAverage: 0,
-      promAverage: 0, // Sueldo mensual promedio = (sueldo mensual ordinario * 14) / 12
+      promAverage: 0,
       baseDaily: 0,
-      promDaily: 0, // Sueldo diario promedio = sueldo mensual promedio / 30
+      promDaily: 0,
       total: 0,
     };
   }
@@ -133,15 +133,9 @@ function calculateSalaryAverages(salaryHistory: Array<{ amount: number; overtime
   const totalWithOvertime = withOvertime.reduce((sum, s) => sum + s, 0);
   const basePromAverage = totalWithOvertime / withOvertime.length;
   
-  // Sueldo mensual ordinario (last salary or average)
   const baseMonthly = salaries[salaries.length - 1] || baseAverage;
-  
-  // Sueldo mensual promedio = (sueldo mensual ordinario * 14) / 12
   const promAverage = (baseMonthly * 14) / 12;
-  
-  // Sueldo diario promedio = sueldo mensual promedio / 30
   const promDaily = promAverage / 30;
-  
   const baseDaily = baseAverage / 30;
   
   return {
@@ -156,7 +150,7 @@ function calculateSalaryAverages(salaryHistory: Array<{ amount: number; overtime
 }
 
 /**
- * Generate PDF that matches RRHH.csv layout
+ * Generate PDF with clean, readable layout
  */
 export async function generateSeverancePDFFromForm(
   formData: SeveranceFormData
@@ -169,41 +163,35 @@ export async function generateSeverancePDFFromForm(
   const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   
   const margin = 50;
-  const lineHeight = 14; // Increased from 12 to 14 for better row separation
-  const sectionSpacing = 8; // Extra spacing between sections
+  const lineHeight = 16;
+  const sectionSpacing = 6;
+  const tableLineHeight = 18;
   let yPosition = height - margin;
   
-  // Define precise column positions based on CSV structure
-  // Using fixed positions with wider spacing to prevent overlap
-  // LETTER width = 612pt, so we distribute columns across this width
+  // Clean column definitions - wider spacing to prevent overlap
   const cols = {
-    A: 50,          // Column A - Labels (50pt from left)
-    B: 85,          // Column B - Small offset values
-    C: 120,         // Column C - Small values
-    D: 180,         // Column D - Main values (wider spacing)
-    E: 280,         // Column E - Secondary values
-    F: 380,         // Column F - "Días" label (wide spacing)
-    G: 410,         // Column G - "x" symbol
-    H: 450,         // Column H - Daily salary (wider spacing)
-    I: 510,         // Column I - Payment amounts (right side, wider spacing)
-    J: 570,         // Column J - Rightmost (42pt from right edge = 612 - 570)
+    label: 50,          // Labels (description column)
+    value: 200,         // Values (dates, names, etc.)
+    days: 320,          // Days column
+    multiplier: 345,    // "x" symbol
+    rate: 365,          // Rate (daily salary)
+    amount: 500,        // Amount (payment)
   };
   
-  // Helper function to draw text with max width to prevent overflow
+  // Helper function to draw text with overflow handling
   const drawText = (text: string, x: number, y: number, size: number = 10, bold: boolean = false, maxWidth?: number) => {
-    if (y < margin) {
+    if (y < margin + 20) {
       currentPage = pdfDoc.addPage([612, 792]);
       yPosition = height - margin;
       y = yPosition;
     }
     
-    let displayText = text;
+    let displayText = text || '';
     if (maxWidth) {
       const font = bold ? helveticaBoldFont : helveticaFont;
-      let textWidth = font.widthOfTextAtSize(text, size);
+      let textWidth = font.widthOfTextAtSize(displayText, size);
       if (textWidth > maxWidth) {
-        // Truncate text if too long
-        let truncated = text;
+        let truncated = displayText;
         while (textWidth > maxWidth && truncated.length > 0) {
           truncated = truncated.slice(0, -1);
           textWidth = font.widthOfTextAtSize(truncated + '...', size);
@@ -221,28 +209,17 @@ export async function generateSeverancePDFFromForm(
     });
   };
   
-  // Helper function to draw right-aligned text with max width
-  const drawTextRight = (text: string, x: number, y: number, size: number = 10, bold: boolean = false, maxWidth?: number) => {
-    if (y < margin) {
+  // Helper function to draw right-aligned text
+  const drawTextRight = (text: string, x: number, y: number, size: number = 10, bold: boolean = false) => {
+    if (y < margin + 20) {
       currentPage = pdfDoc.addPage([612, 792]);
       yPosition = height - margin;
       y = yPosition;
     }
     
     const font = bold ? helveticaBoldFont : helveticaFont;
-    let displayText = text;
-    let textWidth = font.widthOfTextAtSize(text, size);
-    
-    if (maxWidth && textWidth > maxWidth) {
-      // Truncate text if too long
-      let truncated = text;
-      while (textWidth > maxWidth && truncated.length > 0) {
-        truncated = truncated.slice(0, -1);
-        textWidth = font.widthOfTextAtSize(truncated + '...', size);
-      }
-      displayText = truncated + '...';
-      textWidth = font.widthOfTextAtSize(displayText, size);
-    }
+    const displayText = text || '';
+    const textWidth = font.widthOfTextAtSize(displayText, size);
     
     currentPage.drawText(displayText, {
       x: Math.max(0, x - textWidth),
@@ -253,9 +230,9 @@ export async function generateSeverancePDFFromForm(
     });
   };
   
-  // Helper function to draw horizontal line separator
-  const drawHorizontalLine = (y: number, startX: number = margin, endX: number = width - margin) => {
-    if (y < margin) {
+  // Helper function to draw horizontal line
+  const drawLine = (y: number, startX: number = margin, endX: number = width - margin, thickness: number = 0.5) => {
+    if (y < margin + 20) {
       currentPage = pdfDoc.addPage([612, 792]);
       yPosition = height - margin;
       y = yPosition;
@@ -264,58 +241,49 @@ export async function generateSeverancePDFFromForm(
     currentPage.drawLine({
       start: { x: startX, y },
       end: { x: endX, y },
-      thickness: 0.5,
+      thickness,
       color: rgb(0, 0, 0),
     });
   };
   
-  // Helper function to move to next row with proper spacing
+  // Helper function to move to next row
   const nextRow = (extraSpacing: number = 0) => {
     yPosition -= lineHeight + extraSpacing;
   };
   
-  // Helper function to format number with padding for display
-  const formatPadded = (num: number, decimals: number = 2): string => {
-    if (num === 0) return '  0,00 ';
-    // Round first to ensure proper 2 decimal display
-    const rounded = roundTo2Decimals(num);
-    return rounded.toFixed(decimals).replace('.', ',').padStart(8, ' ');
+  // Helper function to format number with decimals
+  const formatNumber = (num: number, decimals: number = 2): string => {
+    if (num === 0) return '0.00';
+    return num.toFixed(decimals).replace('.', ',');
   };
   
-  // Calculate derived values
+  // Calculate derived values (KEEP ALL FORMULAS THE SAME)
   const servicePeriod = calculateServicePeriod(formData.startDate, formData.terminationDate);
   const salaryAvgs = calculateSalaryAverages(formData.salaryHistory);
   
-  // Helper function to round to 2 decimal places (banker's rounding for precision)
   const roundTo2Decimals = (num: number): number => {
-    // Use toFixed(2) and parseFloat to handle floating point precision issues
     return Math.round((num + Number.EPSILON) * 100) / 100;
   };
   
-  // Helper function to round currency to 2 decimal places (for payments)
   const roundCurrency = (num: number): number => {
-    // Ensure proper rounding for currency amounts
     return parseFloat(num.toFixed(2));
   };
   
-  // Calculate benefits (round all currency amounts)
+  // Calculate benefits (KEEP ALL FORMULAS EXACTLY THE SAME)
   const preavisoPay = roundCurrency(formData.preavisoDays * salaryAvgs.promDaily);
   const cesantiaPay = roundCurrency(formData.cesantiaDays * salaryAvgs.promDaily);
   const cesantiaProPay = roundCurrency(formData.cesantiaProportionalDays * salaryAvgs.promDaily);
   const vacationPay = roundCurrency(formData.vacationDaysRemaining * salaryAvgs.promDaily);
   const vacationBonusPay = roundCurrency(formData.vacationBonusDays * salaryAvgs.promDaily);
   
-  // For these three, use days/12 for payment calculation (proportional to months)
-  // Calculate days first, then round to 2 decimals for display
-  const vacationProDays = roundTo2Decimals(formData.vacationProportionalDays / 12);
-  // For payment, use the rounded days value and round the final result
+  const vacationProDays = roundTo2Decimals(formData.vacationProportionalDays);
   const vacationProPay = roundCurrency(vacationProDays * salaryAvgs.promDaily);
   
-  const thirteenthDays = roundTo2Decimals(formData.thirteenthMonthDays / 12);
-  const thirteenthPay = roundCurrency(thirteenthDays * salaryAvgs.baseDaily);
+  const thirteenthDays = roundTo2Decimals((formData.thirteenthMonthDays * 30) / 360);
+  const thirteenthPay = roundCurrency(thirteenthDays * (salaryAvgs.baseMonthly / 30));
   
-  const fourteenthDays = roundTo2Decimals(formData.fourteenthMonthDays / 12);
-  const fourteenthPay = roundCurrency(fourteenthDays * salaryAvgs.baseDaily);
+  const fourteenthDays = roundTo2Decimals((formData.fourteenthMonthDays * 30) / 360);
+  const fourteenthPay = roundCurrency(fourteenthDays * (salaryAvgs.baseMonthly / 30));
   
   const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + vacationPay + vacationBonusPay + 
                         vacationProPay + thirteenthPay + fourteenthPay + formData.salariesDue + 
@@ -325,308 +293,274 @@ export async function generateSeverancePDFFromForm(
   const totalDeductions = formData.municipalTax + formData.preavisoPenalty;
   const finalTotal = totalBenefits - totalDeductions;
   
-  // Row 1: Title
+  // ========== HEADER ==========
   const titleText = 'CALCULO DE PRESTACIONES LABORALES';
-  const titleWidth = helveticaBoldFont.widthOfTextAtSize(titleText, 14);
-  drawText(titleText, (width - titleWidth) / 2, yPosition, 14, true);
-  nextRow(sectionSpacing);
+  const titleWidth = helveticaBoldFont.widthOfTextAtSize(titleText, 16);
+  drawText(titleText, (width - titleWidth) / 2, yPosition, 16, true);
+  nextRow(sectionSpacing * 2);
+  drawLine(yPosition);
+  nextRow(sectionSpacing * 2);
+  
+  // ========== EMPLOYEE INFORMATION SECTION ==========
+  drawText('EMPLEADO:', cols.label, yPosition, 11, true);
+  drawText((formData.employeeName || '').substring(0, 40), cols.value, yPosition, 10, false, 200);
   nextRow(sectionSpacing);
   
-  // Row 3: Employee name and DNI
-  drawText('EMPLEADO', cols.A, yPosition, 10, false);
-  drawText(formData.employeeName || '', cols.D, yPosition, 10, false);
-  drawText('No. Identidad', cols.I - 40, yPosition, 10, false);
-  drawText(maskDNI(formData.dni || ''), cols.I + 10, yPosition, 10, false);
+  drawText('No. Identidad:', cols.label, yPosition, 10, false);
+  drawText(maskDNI(formData.dni || ''), cols.value, yPosition, 10, false);
   nextRow(sectionSpacing);
   
-  // Row 4: Termination reason
-  drawText('Motivo', cols.I - 40, yPosition, 10, false);
-  drawText(formData.terminationReason || '', cols.I + 10, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  drawText('Motivo:', cols.label, yPosition, 10, false);
+  drawText((formData.terminationReason || '').substring(0, 40), cols.value, yPosition, 10, false, 200);
+  nextRow(sectionSpacing * 2);
+  
+  drawText('FECHA DE INGRESO:', cols.label, yPosition, 10, false);
+  drawText(formatDate(formData.startDate), cols.value, yPosition, 10, false);
   nextRow(sectionSpacing);
   
-  // Row 5: Start date
-  drawText('FECHA DE INGRESO', cols.A, yPosition, 10, false);
-  drawText(formatDate(formData.startDate), cols.D, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  drawText('FECHA DE RETIRO:', cols.label, yPosition, 10, false);
+  drawText(formatDate(formData.terminationDate), cols.value, yPosition, 10, false);
   nextRow(sectionSpacing);
   
-  // Row 7: Termination date
-  drawText('FECHA DE RETIRO', cols.A, yPosition, 10, false);
-  drawText(formatDate(formData.terminationDate), cols.D, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  drawText('ANTIGÜEDAD:', cols.label, yPosition, 10, false);
+  drawText(`${servicePeriod.years} AÑOS ${servicePeriod.months} MESES ${servicePeriod.days} DIAS`, cols.value, yPosition, 10, false);
+  nextRow(sectionSpacing * 2);
+  drawLine(yPosition);
+  nextRow(sectionSpacing * 2);
+  
+  // ========== SALARY INFORMATION SECTION ==========
+  drawText('SUELDO MENSUAL ORDINARIO:', cols.label, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.baseMonthly).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(sectionSpacing);
   
-  // Row 9: Seniority
-  drawText('ANTIGÜEDAD', cols.A, yPosition, 10, false);
-  drawText(String(servicePeriod.years), cols.D, yPosition, 10, false);
-  drawText('AÑOS', cols.D + 25, yPosition, 10, false);
-  drawText(String(servicePeriod.months), cols.D + 70, yPosition, 10, false);
-  drawText('MESES', cols.D + 105, yPosition, 10, false);
-  drawText(String(servicePeriod.days), cols.D + 155, yPosition, 10, false);
-  drawText('DIAS', cols.D + 195, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  drawText('Promedio:', cols.label + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(salaryAvgs.baseAverage).replace('L. ', ''), cols.amount, yPosition, 9, false);
+  nextRow(sectionSpacing * 2);
+  
+  drawText('SUELDO MENSUAL PROMEDIO:', cols.label, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promAverage).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(sectionSpacing);
   
-  // Row 11: Monthly salary
-  drawText('SUELDO MENSUAL ORDINARIO', cols.A, yPosition, 10, false);
-  drawText('Lps', cols.D, yPosition, 10, false);
-  const baseMonthlyStr = formatCurrency(salaryAvgs.baseMonthly).replace('L. ', '');
-  drawTextRight(baseMonthlyStr, cols.E + 20, yPosition, 10, false);
-  const baseAvgStr = formatCurrency(salaryAvgs.baseAverage).replace('L. ', '');
-  drawTextRight(baseAvgStr, cols.I - 10, yPosition, 10, false);
-  const promAvgStr = formatCurrency(salaryAvgs.promAverage).replace('L. ', '');
-  drawTextRight(promAvgStr, cols.J - 40, yPosition, 10, false);
-  drawTextRight(promAvgStr, cols.J, yPosition, 10, false);
+  drawText('Sueldo Diario Promedio:', cols.label + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.amount, yPosition, 9, false);
+  nextRow(sectionSpacing * 2);
+  drawLine(yPosition);
+  nextRow(sectionSpacing * 2);
+  
+  // ========== CALCULATION TABLE SECTION ==========
+  drawText('CALCULO', cols.label, yPosition, 12, true);
+  nextRow(sectionSpacing * 2);
+  
+  // Table header
+  drawLine(yPosition);
+  nextRow(sectionSpacing);
+  drawText('CONCEPTO', cols.label, yPosition, 9, true);
+  drawText('DÍAS', cols.days, yPosition, 9, true);
+  drawText('x', cols.multiplier, yPosition, 9, true);
+  drawText('TASA DIARIA', cols.rate, yPosition, 9, true);
+  drawTextRight('TOTAL', cols.amount, yPosition, 9, true);
+  nextRow(sectionSpacing);
+  drawLine(yPosition);
   nextRow(sectionSpacing);
   
-  // Row 12: Empty row with labels
-  drawText('Promedio', cols.E - 20, yPosition, 9, false);
-  drawText('TOTAL', cols.I - 40, yPosition, 9, false);
-  drawText('TOTAL', cols.J - 40, yPosition, 9, false);
-  drawText('Prom. Dia', cols.J - 10, yPosition, 9, false);
-  nextRow(sectionSpacing);
+  // PREAVISO
+  drawText('PREAVISO', cols.label, yPosition, 10, false);
+  drawText(formatNumber(formData.preavisoDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(preavisoPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
-  // Row 13: Average monthly salary
-  drawText('SUELDO MENSUAL PROMEDIO', cols.A, yPosition, 10, false);
-  drawText('Lps', cols.D, yPosition, 10, false);
-  drawTextRight(promAvgStr, cols.E + 20, yPosition, 10, false);
-  const baseDailyStr = formatCurrency(salaryAvgs.baseDaily).replace('L. ', '');
-  drawTextRight(baseDailyStr, cols.H + 30, yPosition, 10, false);
-  const promDailyStr = formatCurrency(salaryAvgs.promDaily).replace('L. ', '');
-  drawTextRight(promDailyStr, cols.J - 40, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  // AUXILIO DE CESANTIA
+  drawText('AUXILIO DE CESANTIA', cols.label, yPosition, 10, false);
+  drawText(formatNumber(formData.cesantiaDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(cesantiaPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
-  // Row 15: CALCULO
-  drawText('CALCULO', cols.A, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  // AUXILIO DE CESANTIA PROPORCIONAL
+  drawText('AUXILIO DE CESANTIA PROPORCIONAL', cols.label, yPosition, 10, false);
+  drawText(formatNumber(formData.cesantiaProportionalDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(cesantiaProPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
-  // Benefits section with proper column alignment and row separation
-  // Preaviso
-  drawText('PREAVISO', cols.A, yPosition, 10, false);
-  drawText(formatPadded(formData.preavisoDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.H + 20, yPosition, 10, false);
-  const preavisoPayStr = formatCurrency(preavisoPay).replace('L. ', '');
-  drawTextRight(preavisoPayStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  // VACACIONES
+  drawText('VACACIONES', cols.label, yPosition, 10, false);
+  drawText(formatNumber(formData.vacationDaysRemaining, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(vacationPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
-  // Cesantia
-  drawText('AUXILIO DE CESANTIA', cols.A, yPosition, 10, false);
-  drawText(formatPadded(formData.cesantiaDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.H + 20, yPosition, 10, false);
-  const cesantiaPayStr = formatCurrency(cesantiaPay).replace('L. ', '');
-  drawTextRight(cesantiaPayStr || '  -   ', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  // VACACIONES PROPORCIONALES
+  drawText('VACACIONES PROPORCIONALES', cols.label, yPosition, 10, false);
+  drawText(formatNumber(vacationProDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(vacationProPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
-  // Cesantia Proportional
-  drawText('AUXILIO DE CESANTIA PROPORCIONAL', cols.A, yPosition, 10, false);
-  drawText(formatPadded(formData.cesantiaProportionalDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.H + 20, yPosition, 10, false);
-  const cesantiaProPayStr = formatCurrency(cesantiaProPay).replace('L. ', '');
-  drawTextRight(cesantiaProPayStr || '  -   ', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
-  
-  // Vacations
-  drawText('VACACIONES', cols.A, yPosition, 10, false);
-  drawText(formatPadded(formData.vacationDaysRemaining, 2), cols.C, yPosition, 10, false);
-  drawText(formatPadded(formData.vacationDaysRemaining, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.H + 20, yPosition, 10, false);
-  const vacationPayStr = formatCurrency(vacationPay).replace('L. ', '');
-  drawTextRight(vacationPayStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
-  
-  // Vacation Proportional
-  drawText('VACACIONES PROPORCIONALES', cols.A, yPosition, 10, false);
-  drawText(formatPadded(vacationProDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(promDailyStr, cols.H + 20, yPosition, 10, false);
-  const vacationProPayStr = formatCurrency(vacationProPay).replace('L. ', '');
-  drawTextRight(vacationProPayStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  
-  // Last anniversary and entitlement
+  // Vacation dates info (if available)
   if (formData.lastAnniversaryDate) {
-    drawText(formatDate(formData.lastAnniversaryDate), cols.A, yPosition, 10, false);
-    drawText(formatDate(formData.terminationDate), cols.C + 20, yPosition, 10, false);
     nextRow(sectionSpacing);
-    drawText(String(formData.vacationDaysEntitlement), cols.B, yPosition, 10, false);
-    nextRow(sectionSpacing);
+    drawText(`Desde: ${formatDate(formData.lastAnniversaryDate)}`, cols.label + 20, yPosition, 8, false);
+    drawText(`Hasta: ${formatDate(formData.terminationDate)}`, cols.label + 150, yPosition, 8, false);
+    drawText(`Días Totales: ${formData.vacationDaysEntitlement}`, cols.label + 270, yPosition, 8, false);
+    nextRow(tableLineHeight);
   }
   
-  // 13th Month
-  drawText('DECIMO TERCER MES', cols.A, yPosition, 10, false);
-  drawText(formatPadded(thirteenthDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(baseDailyStr, cols.H + 20, yPosition, 10, false);
-  const thirteenthPayStr = formatCurrency(thirteenthPay).replace('L. ', '');
-  drawTextRight(thirteenthPayStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  // DECIMO TERCER MES
+  const monthlyDailyRate = salaryAvgs.baseMonthly / 30;
+  drawText('DECIMO TERCER MES', cols.label, yPosition, 10, false);
+  drawText(formatNumber(thirteenthDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(monthlyDailyRate).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(thirteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
   if (formData.thirteenthMonthStartDate) {
     const startDate = formData.thirteenthMonthStartDate.split('-');
-    drawText(`${startDate[2]}/${startDate[1]}/${startDate[0]}`, cols.A, yPosition, 10, false);
-    drawText(formatDate(formData.terminationDate), cols.C + 20, yPosition, 10, false);
-    nextRow(sectionSpacing);
+    drawText(`Desde: ${startDate[2]}/${startDate[1]}/${startDate[0]}`, cols.label + 20, yPosition, 8, false);
+    drawText(`Hasta: ${formatDate(formData.terminationDate)}`, cols.label + 150, yPosition, 8, false);
+    nextRow(tableLineHeight);
   }
   
-  // 14th Month
-  nextRow(sectionSpacing);
-  drawText('DECIMO CUARTO MES', cols.A, yPosition, 10, false);
-  drawText(formatPadded(fourteenthDays, 2), cols.D, yPosition, 10, false);
-  drawText('Días', cols.F, yPosition, 10, false);
-  drawText('x', cols.G, yPosition, 10, false);
-  drawTextRight(baseDailyStr, cols.H + 20, yPosition, 10, false);
-  const fourteenthPayStr = formatCurrency(fourteenthPay).replace('L. ', '');
-  drawTextRight(fourteenthPayStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
+  // DECIMO CUARTO MES
+  drawText('DECIMO CUARTO MES', cols.label, yPosition, 10, false);
+  drawText(formatNumber(fourteenthDays, 2), cols.days, yPosition, 10, false);
+  drawText('x', cols.multiplier, yPosition, 10, false);
+  drawTextRight(formatCurrency(monthlyDailyRate).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(fourteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  nextRow(tableLineHeight);
   
   if (formData.fourteenthMonthStartDate) {
-    drawText(formatDate(formData.fourteenthMonthStartDate), cols.A, yPosition, 10, false);
-    drawText(formatDate(formData.terminationDate), cols.C + 20, yPosition, 10, false);
-    nextRow(sectionSpacing);
+    drawText(`Desde: ${formatDate(formData.fourteenthMonthStartDate)}`, cols.label + 20, yPosition, 8, false);
+    drawText(`Hasta: ${formatDate(formData.terminationDate)}`, cols.label + 150, yPosition, 8, false);
+    nextRow(tableLineHeight);
   }
   
-  // Total Benefits
+  // Table footer
   nextRow(sectionSpacing);
-  const totalBenefitsStr = formatCurrency(totalBenefits).replace('L. ', '');
-  drawTextRight(totalBenefitsStr, cols.J, yPosition, 10, true);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  drawLine(yPosition);
+  nextRow(sectionSpacing * 2);
   
-  // PRESTACIONES row
-  drawText('PRESTACIONES', cols.A, yPosition, 10, false);
-  drawText('Lps', cols.I, yPosition, 10, false);
-  drawTextRight(totalBenefitsStr, cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  // ========== TOTAL PRESTACIONES ==========
+  drawText('PRESTACIONES', cols.label, yPosition, 11, true);
+  drawTextRight(formatCurrency(totalBenefits).replace('L. ', ''), cols.amount, yPosition, 11, true);
+  nextRow(sectionSpacing * 2);
+  drawLine(yPosition);
+  nextRow(sectionSpacing * 2);
   
-  // A FAVOR section (if needed)
-  drawText('A FAVOR', cols.A, yPosition, 10, false);
-  drawText('N/A', cols.B, yPosition, 10, false);
-  drawTextRight('0,00', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
-  
-  // Additional Payments Section
-  drawText('Salarios Adeudados(LPS):', cols.A, yPosition, 10, false);
-  const salariesDueStr = formatCurrency(formData.salariesDue).replace('L. ', '');
-  drawTextRight(salariesDueStr || '  -   ', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  
-  drawText('Vacaciones Pendientes(Dias):', cols.A, yPosition, 10, false);
-  drawTextRight(String(formData.vacationDaysRemaining), cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  
-  drawText('Otros Pagos(LPS):', cols.A, yPosition, 10, false);
-  const otherPaymentsStr = formatCurrency(formData.otherPayments).replace('L. ', '');
-  drawTextRight(otherPaymentsStr || '  -   ', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  
-  drawText('Pago HE Pendiente(LPS):', cols.A, yPosition, 10, false);
-  const overtimeDueStr = formatCurrency(formData.overtimeDue).replace('L. ', '');
-  drawTextRight(overtimeDueStr || '  -   ', cols.J, yPosition, 10, false);
-  nextRow(sectionSpacing);
-  
-  // Deductions
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
-  drawText('DEDUCCIONES', cols.A, yPosition, 10, true);
-  nextRow(sectionSpacing);
-  
-  if (formData.municipalTax > 0) {
-    drawText('Impuesto vecinal', cols.B, yPosition, 10, false);
-    const municipalTaxStr = formatCurrency(formData.municipalTax).replace('L. ', '');
-    drawTextRight(municipalTaxStr, cols.J, yPosition, 10, false);
+  // ========== ADDITIONAL PAYMENTS ==========
+  if (formData.salariesDue > 0 || formData.overtimeDue > 0 || formData.otherPayments > 0) {
+    drawText('OTROS PAGOS', cols.label, yPosition, 11, true);
     nextRow(sectionSpacing);
+    
+    if (formData.salariesDue > 0) {
+      drawText('Salarios Adeudados:', cols.label + 20, yPosition, 10, false);
+      drawTextRight(formatCurrency(formData.salariesDue).replace('L. ', ''), cols.amount, yPosition, 10, false);
+      nextRow(sectionSpacing);
+    }
+    
+    if (formData.overtimeDue > 0) {
+      drawText('Horas Extras Pendientes:', cols.label + 20, yPosition, 10, false);
+      drawTextRight(formatCurrency(formData.overtimeDue).replace('L. ', ''), cols.amount, yPosition, 10, false);
+      nextRow(sectionSpacing);
+    }
+    
+    if (formData.otherPayments > 0) {
+      drawText('Otros Pagos:', cols.label + 20, yPosition, 10, false);
+      drawTextRight(formatCurrency(formData.otherPayments).replace('L. ', ''), cols.amount, yPosition, 10, false);
+      nextRow(sectionSpacing);
+    }
+    
+    nextRow(sectionSpacing);
+    drawLine(yPosition);
+    nextRow(sectionSpacing * 2);
   }
   
-  if (formData.preavisoPenalty > 0) {
-    drawText('Penalización por incumplimiento de preaviso', cols.B, yPosition, 10, false);
-    const penaltyStr = formatCurrency(formData.preavisoPenalty).replace('L. ', '');
-    drawTextRight(penaltyStr, cols.J, yPosition, 10, false);
+  // ========== DEDUCTIONS ==========
+  if (totalDeductions > 0) {
+    drawText('DEDUCCIONES', cols.label, yPosition, 11, true);
     nextRow(sectionSpacing);
+    
+    if (formData.municipalTax > 0) {
+      drawText('Impuesto Vecinal:', cols.label + 20, yPosition, 10, false);
+      drawTextRight(formatCurrency(formData.municipalTax).replace('L. ', ''), cols.amount, yPosition, 10, false);
+      nextRow(sectionSpacing);
+    }
+    
+    if (formData.preavisoPenalty > 0) {
+      drawText('Penalización por Incumplimiento de Preaviso:', cols.label + 20, yPosition, 10, false);
+      drawTextRight(formatCurrency(formData.preavisoPenalty).replace('L. ', ''), cols.amount, yPosition, 10, false);
+      nextRow(sectionSpacing);
+    }
+    
+    drawTextRight(formatCurrency(totalDeductions).replace('L. ', ''), cols.amount, yPosition, 10, true);
+    nextRow(sectionSpacing * 2);
+    drawLine(yPosition);
+    nextRow(sectionSpacing * 2);
   }
   
-  // Summary
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
-  drawText('RESUMEN', cols.A, yPosition, 10, true);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  // ========== FINAL TOTAL ==========
+  drawText('PRESTACIONES AL', cols.label, yPosition, 11, true);
+  drawText(formatDate(formData.terminationDate), cols.value, yPosition, 10, false);
+  nextRow(sectionSpacing * 2);
   
-  drawText('PRESTACIONES AL', cols.A, yPosition, 10, false);
-  drawText(formatDate(formData.terminationDate), cols.C + 20, yPosition, 10, false);
-  drawText('Lps', cols.I, yPosition, 10, false);
-  const finalTotalStr = formatCurrency(finalTotal).replace('L. ', '');
-  drawTextRight(finalTotalStr, cols.J, yPosition, 10, true);
-  nextRow(sectionSpacing);
-  nextRow(sectionSpacing);
+  drawText('TOTAL', cols.label, yPosition, 12, true);
+  drawTextRight(formatCurrency(finalTotal).replace('L. ', ''), cols.amount, yPosition, 12, true);
+  nextRow(sectionSpacing * 2);
+  drawLine(yPosition, margin, width - margin, 1);
   
-  drawTextRight('TOTAL', cols.I + 10, yPosition, 10, true);
-  drawText('Lps', cols.I + 30, yPosition, 10, true);
-  nextRow(sectionSpacing);
-  drawTextRight(finalTotalStr, cols.J, yPosition, 10, true);
-  
-  // Salary History Section (if we have space, otherwise new page)
+  // ========== SALARY HISTORY (new page if needed) ==========
   if (yPosition < 200) {
     currentPage = pdfDoc.addPage([612, 792]);
     yPosition = height - margin;
   } else {
-    yPosition -= lineHeight * 3;
+    nextRow(sectionSpacing * 3);
   }
   
-  drawText('SALARIO MENSUAL:', cols.A, yPosition, 10, true);
-  drawText('INGRESOS ADICIONALES (Horas Extras):', width / 2, yPosition, 10, true);
-  yPosition -= lineHeight;
+  drawText('HISTORIAL DE SALARIOS', cols.label, yPosition, 11, true);
+  nextRow(sectionSpacing * 2);
+  
+  // Salary history headers
+  drawText('SALARIO MENSUAL', cols.label, yPosition, 9, true);
+  drawText('HORAS EXTRAS', width / 2, yPosition, 9, true);
+  nextRow(sectionSpacing);
+  drawLine(yPosition);
+  nextRow(sectionSpacing);
   
   formData.salaryHistory.forEach(salary => {
-    drawText(salary.month, cols.A, yPosition, 10, false);
-    drawText(String(salary.year), cols.A + 70, yPosition, 10, false);
-    const salaryStr = formatCurrency(salary.amount).replace('L. ', '');
-    drawTextRight(salaryStr, cols.E, yPosition, 10, false);
+    drawText(`${salary.month} ${salary.year}`, cols.label, yPosition, 9, false);
+    drawTextRight(formatCurrency(salary.amount).replace('L. ', ''), cols.value + 100, yPosition, 9, false);
     
-    drawText(salary.month, width / 2, yPosition, 10, false);
-    drawText(String(salary.year), width / 2 + 70, yPosition, 10, false);
-    const overtimeStr = formatCurrency(salary.overtime || 0).replace('L. ', '');
-    drawTextRight(overtimeStr || '  -   ', width / 2 + 150, yPosition, 10, false);
-    yPosition -= lineHeight;
+    drawText(`${salary.month} ${salary.year}`, width / 2, yPosition, 9, false);
+    drawTextRight(formatCurrency(salary.overtime || 0).replace('L. ', ''), width / 2 + 100, yPosition, 9, false);
+    nextRow(sectionSpacing);
   });
   
-  // Totals for salary history
+  // Salary totals
   const salaryTotal = formData.salaryHistory.reduce((sum, s) => sum + s.amount, 0);
   const salaryAvg = salaryTotal / (formData.salaryHistory.length || 1);
   const overtimeTotal = formData.salaryHistory.reduce((sum, s) => sum + (s.overtime || 0), 0);
   
-  drawText('Suman', cols.A, yPosition, 10, false);
-  const salaryTotalStr = formatCurrency(salaryTotal).replace('L. ', '');
-  drawTextRight(salaryTotalStr, cols.E, yPosition, 10, false);
-  const salaryAvgStr = formatCurrency(salaryAvg).replace('L. ', '');
-  drawTextRight(salaryAvgStr, cols.E + 50, yPosition, 10, false);
-  drawText('Suman', width / 2, yPosition, 10, false);
-  const overtimeTotalStr = formatCurrency(overtimeTotal).replace('L. ', '');
-  drawTextRight(overtimeTotalStr || '  -   ', width / 2 + 150, yPosition, 10, false);
+  nextRow(sectionSpacing);
+  drawLine(yPosition);
+  nextRow(sectionSpacing);
+  drawText('TOTAL / PROMEDIO', cols.label, yPosition, 9, true);
+  drawTextRight(formatCurrency(salaryTotal).replace('L. ', ''), cols.value + 100, yPosition, 9, false);
+  drawTextRight(formatCurrency(salaryAvg).replace('L. ', ''), cols.value + 150, yPosition, 9, false);
   
-  // Footer
+  drawTextRight(formatCurrency(overtimeTotal).replace('L. ', ''), width / 2 + 100, yPosition, 9, false);
+  
+  // ========== FOOTER ==========
   yPosition = margin + 40;
-  drawText('ELABORADO POR:', cols.A, yPosition, 10, false);
-  drawText('REVISADO POR:', width / 2 - 50, yPosition, 10, false);
-  drawText('RECIBE', cols.I, yPosition, 10, false);
+  drawText('ELABORADO POR:', cols.label, yPosition, 9, false);
+  drawText('REVISADO POR:', width / 2 - 50, yPosition, 9, false);
+  drawText('RECIBE', cols.amount - 50, yPosition, 9, false);
   
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
