@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:severance-template": "tsx scripts/create-excel-template.ts",
+    "generate:severance": "tsx scripts/generate-from-excel.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
@@ -17,6 +19,7 @@
     "exceljs": "^4.4.0",
     "jsonwebtoken": "^9.0.2",
     "next": "16.0.3",
+    "pdf-lib": "^1.17.1",
     "prisma": "^6.19.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -33,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
