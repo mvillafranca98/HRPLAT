@@ -6,11 +6,15 @@ import {
   calculatePreavisoDays,
   calculateRequiredPreavisoDays,
   calculateTerminationDateFromPreaviso,
-  calculateProportionalVacationDaysForm,
-  getLastJuly1st,
+  calculateVacationProportionalDays,
+  calculateCesantiaDays,
+  calculateCesantiaProportionalDays,
+  getLastJanuary1st,
   calculateThirteenthMonthDays,
-  getJanuary1stOfYear,
+  getJanuary1stOfTerminationYear,
+  getLastJuly1st,
   calculateFourteenthMonthDays,
+  getJuly1stOfTerminationYear,
   formatDateForInput,
 } from '@/lib/severanceFormCalculations';
 
@@ -170,20 +174,40 @@ export default function SeveranceCalculator() {
         
         const terminationDateStr = formatDateForInput(terminationDate);
         
-        // Calculate 13th Month dates
-        // Start date: Last July 1st before or on termination date (most recent July 1st)
-        const lastJuly1st = getLastJuly1st(terminationDateStr);
-        const thirteenthMonthStartDateStr = formatDateForInput(lastJuly1st);
+        // Calculate cesantia days
+        const cesantiaDays = data.startDate && terminationDateStr
+          ? calculateCesantiaDays(data.startDate, terminationDateStr)
+          : 0;
+        
+        // Calculate cesantia proportional days
+        const cesantiaProportionalDays = data.startDate && terminationDateStr
+          ? calculateCesantiaProportionalDays(data.startDate, terminationDateStr)
+          : 0;
+        
+        // Calculate vacation proportional days (new formula)
+        const vacationProportionalDays = data.startDate && terminationDateStr && data.vacationDaysEntitlement
+          ? calculateVacationProportionalDays(data.startDate, terminationDateStr, data.vacationDaysEntitlement)
+          : 0;
+        
+        // Calculate 13th Month dates (NOW USES JANUARY 1ST)
+        // Start date: January 1st of termination year
+        const thirteenthMonthStart = getJanuary1stOfTerminationYear(terminationDateStr);
+        const thirteenthMonthStartDateStr = formatDateForInput(thirteenthMonthStart);
+        // For calculation: use last January 1st (most recent before termination)
+        const lastJanuary1st = getLastJanuary1st(terminationDateStr);
         const thirteenthMonthDays = calculateThirteenthMonthDays(
-          lastJuly1st,
+          lastJanuary1st,
           terminationDateStr
         );
         
-        // Calculate 14th Month dates
-        const fourteenthMonthStart = getJanuary1stOfYear(terminationDateStr);
+        // Calculate 14th Month dates (NOW USES JULY 1ST)
+        // Start date: July 1st of termination year
+        const fourteenthMonthStart = getJuly1stOfTerminationYear(terminationDateStr);
         const fourteenthMonthStartDateStr = formatDateForInput(fourteenthMonthStart);
+        // For calculation: use last July 1st (most recent before termination)
+        const lastJuly1st = getLastJuly1st(terminationDateStr);
         const fourteenthMonthDays = calculateFourteenthMonthDays(
-          fourteenthMonthStart,
+          lastJuly1st,
           terminationDateStr
         );
         
@@ -199,12 +223,13 @@ export default function SeveranceCalculator() {
           salaryHistory: data.salaryHistory || [],
           preavisoDays: requiredPreavisoDays,
           terminationDate: terminationDateStr,
-          // Set proportional vacation days = remaining vacation days / 12
-          vacationProportionalDays: data.vacationDaysRemaining ? (data.vacationDaysRemaining / 12) : 0,
-          // 13th Month calculations
+          cesantiaDays,
+          cesantiaProportionalDays,
+          vacationProportionalDays,
+          // 13th Month calculations (NOW JANUARY 1ST)
           thirteenthMonthStartDate: thirteenthMonthStartDateStr,
           thirteenthMonthDays,
-          // 14th Month calculations
+          // 14th Month calculations (NOW JULY 1ST)
           fourteenthMonthStartDate: fourteenthMonthStartDateStr,
           fourteenthMonthDays,
         }));
@@ -233,7 +258,9 @@ export default function SeveranceCalculator() {
 
   // Auto-calculate preaviso days and termination date when start date changes
   useEffect(() => {
-    if (!formData.startDate) return;
+    if (!formData.startDate) {
+      return;
+    }
 
     // Calculate required preaviso days based on service period
     const requiredPreavisoDays = calculateRequiredPreavisoDays(formData.startDate);
@@ -243,64 +270,86 @@ export default function SeveranceCalculator() {
       ? calculateTerminationDateFromPreaviso(requiredPreavisoDays)
       : new Date();
     
+    const terminationDateStr = formatDateForInput(terminationDate);
+    
     setFormData(prev => ({
       ...prev,
       preavisoDays: requiredPreavisoDays,
-      terminationDate: formatDateForInput(terminationDate),
+      terminationDate: terminationDateStr,
     }));
   }, [formData.startDate]);
 
-  // Update proportional vacation days when remaining vacation days change
-  // Formula: vacationDaysRemaining / 12
+  // Auto-calculate fields when start date or termination date changes
+  const startDate = formData.startDate || '';
+  const terminationDate = formData.terminationDate || '';
+  const vacationDaysEntitlement = formData.vacationDaysEntitlement || 0;
+  
   useEffect(() => {
-    setFormData(prev => ({ 
-      ...prev, 
-      vacationProportionalDays: prev.vacationDaysRemaining ? (prev.vacationDaysRemaining / 12) : 0
-    }));
-  }, [formData.vacationDaysRemaining]);
-
-  // Auto-calculate fields when termination date or related fields change
-  useEffect(() => {
-    if (!formData.terminationDate) return;
-
-    // Calculate Preaviso Days - Always use required preaviso days based on service period
-    // (not calculated from termination date)
-    if (formData.startDate) {
-      const requiredPreavisoDays = calculateRequiredPreavisoDays(formData.startDate);
-      setFormData(prev => ({ ...prev, preavisoDays: requiredPreavisoDays }));
+    if (!startDate || !terminationDate) {
+      return;
     }
 
-    // Calculate 13th Month (Décimo Tercer Mes)
-    // Start date: Last July 1st before or on termination date (most recent July 1st)
-    const lastJuly1st = getLastJuly1st(formData.terminationDate);
-    const thirteenthMonthStartDateStr = formatDateForInput(lastJuly1st);
+    // Calculate Preaviso Days - Always use required preaviso days based on service period
+    const requiredPreavisoDays = calculateRequiredPreavisoDays(startDate);
+    
+    // Calculate cesantia days
+    const cesantiaDays = calculateCesantiaDays(startDate, terminationDate);
+    
+    // Calculate cesantia proportional days
+    const cesantiaProportionalDays = calculateCesantiaProportionalDays(startDate, terminationDate);
+    
+    // Calculate vacation proportional days (new formula: from startDate to terminationDate)
+    const vacationProportionalDays = vacationDaysEntitlement
+      ? calculateVacationProportionalDays(startDate, terminationDate, vacationDaysEntitlement)
+      : 0;
+    
+    setFormData(prev => ({
+      ...prev,
+      preavisoDays: requiredPreavisoDays,
+      cesantiaDays,
+      cesantiaProportionalDays,
+      vacationProportionalDays,
+    }));
+  }, [startDate, terminationDate, vacationDaysEntitlement]);
+
+  // Auto-calculate 13th and 14th month when termination date changes
+  const terminationDateForMonths = formData.terminationDate || '';
+  
+  useEffect(() => {
+    if (!terminationDateForMonths) {
+      return;
+    }
+
+    // Calculate 13th Month (Décimo Tercer Mes) - NOW USES JANUARY 1ST
+    // Start date: January 1st of termination year
+    const thirteenthMonthStart = getJanuary1stOfTerminationYear(terminationDateForMonths);
+    const thirteenthMonthStartDateStr = formatDateForInput(thirteenthMonthStart);
+    // For calculation: use last January 1st (most recent before termination)
+    const lastJanuary1st = getLastJanuary1st(terminationDateForMonths);
     const thirteenthMonthDays = calculateThirteenthMonthDays(
-      lastJuly1st,
-      formData.terminationDate
+      lastJanuary1st,
+      terminationDateForMonths
     );
+    
+    // Calculate 14th Month (Décimo Cuarto Mes) - NOW USES JULY 1ST
+    // Start date: July 1st of termination year
+    const fourteenthMonthStart = getJuly1stOfTerminationYear(terminationDateForMonths);
+    const fourteenthMonthStartDateStr = formatDateForInput(fourteenthMonthStart);
+    // For calculation: use last July 1st (most recent before termination)
+    const lastJuly1st = getLastJuly1st(terminationDateForMonths);
+    const fourteenthMonthDays = calculateFourteenthMonthDays(
+      lastJuly1st,
+      terminationDateForMonths
+    );
+    
     setFormData(prev => ({
       ...prev,
       thirteenthMonthStartDate: thirteenthMonthStartDateStr,
       thirteenthMonthDays,
-    }));
-
-    // Calculate 14th Month (Décimo Cuarto Mes)
-    // Start date: January 1st of termination year
-    const fourteenthMonthStart = getJanuary1stOfYear(formData.terminationDate);
-    const fourteenthMonthStartDateStr = formatDateForInput(fourteenthMonthStart);
-    const fourteenthMonthDays = calculateFourteenthMonthDays(
-      fourteenthMonthStart,
-      formData.terminationDate
-    );
-    setFormData(prev => ({
-      ...prev,
       fourteenthMonthStartDate: fourteenthMonthStartDateStr,
       fourteenthMonthDays,
     }));
-  }, [
-    formData.terminationDate,
-    formData.startDate,
-  ]);
+  }, [terminationDateForMonths]);
 
   const addSalaryMonth = () => {
     const now = new Date();
