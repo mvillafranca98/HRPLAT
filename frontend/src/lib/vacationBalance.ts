@@ -2,17 +2,22 @@
  * Vacation Balance Utilities
  * 
  * Calculates vacation entitlement based on Honduras labor law:
- * - Year 1: 10 days
- * - Year 2: 12 days
- * - Year 3: 15 days
- * - Year 4+: 20 days
+ * Entitlement is determined by completed full years of service:
+ * - 10 days after completion of 1st year (working in year 2, haven't completed year 2 yet)
+ * - 12 days after completion of 2nd year (working in year 3, haven't completed year 3 yet)
+ * - 15 days after completion of 3rd year (working in year 4, haven't completed year 4 yet)
+ * - 20 days after completion of 4th year (working in year 5+)
+ * 
+ * Example: 1 year, 10 months, 22 days → entitlement = 10 days (has not completed 2 full years)
  * 
  * Benefits start after 90-day trial period
  * Vacation days reset on employee anniversary
  */
 
 /**
- * Calculate vacation days entitlement based on years of service (Honduras law)
+ * Calculate vacation days entitlement based on completed years of service (Honduras law)
+ * Entitlement is based on completed full years, not current year being worked.
+ * 
  * @param startDate - Employee start date
  * @param currentDate - Current date (defaults to today)
  * @returns Number of vacation days entitled for the current year
@@ -37,7 +42,8 @@ export function calculateVacationEntitlement(
     return 0; // Still in trial period
   }
 
-  // Calculate years of service (considering the anniversary)
+  // Calculate completed full years of service
+  // This represents how many full years have been completed
   const startYear = start.getFullYear();
   const currentYear = current.getFullYear();
   const startMonth = start.getMonth();
@@ -45,29 +51,39 @@ export function calculateVacationEntitlement(
   const startDay = start.getDate();
   const currentDay = current.getDate();
 
-  // Calculate years since start date
-  let yearsOfService = currentYear - startYear;
+  // Calculate completed full years
+  let completedYears = currentYear - startYear;
 
-  // If anniversary hasn't occurred this year yet, use previous year
+  // If anniversary hasn't occurred this year yet, subtract one
+  // (they haven't completed that year yet)
   if (
     currentMonth < startMonth ||
     (currentMonth === startMonth && currentDay < startDay)
   ) {
-    yearsOfService--;
+    completedYears--;
   }
 
   // Ensure at least 0 years
-  yearsOfService = Math.max(0, yearsOfService);
+  completedYears = Math.max(0, completedYears);
 
-  // Apply Honduras vacation law
-  if (yearsOfService === 0) {
-    return 10; // First year: 10 days
-  } else if (yearsOfService === 1) {
-    return 12; // Second year: 12 days
-  } else if (yearsOfService === 2) {
-    return 15; // Third year: 15 days
+  // Apply Honduras vacation law based on completed years:
+  // - After completion of 1st year (1 completed year): 10 days
+  // - After completion of 2nd year (2 completed years): 12 days  
+  // - After completion of 3rd year (3 completed years): 15 days
+  // - After completion of 4th year (4+ completed years): 20 days
+  // 
+  // Note: Employees get 10 days during their first year (after 90-day trial)
+  // Example: 1 year, 10 months, 22 days = completedYears === 1 → 10 days
+  if (completedYears === 0) {
+    return 10; // First year: 10 days (after 90-day trial period, which is checked above)
+  } else if (completedYears === 1) {
+    return 10; // After completion of 1st year: 10 days (still in second year, haven't completed 2nd year yet)
+  } else if (completedYears === 2) {
+    return 12; // After completion of 2nd year: 12 days
+  } else if (completedYears === 3) {
+    return 15; // After completion of 3rd year: 15 days
   } else {
-    return 20; // Fourth year and above: 20 days
+    return 20; // After completion of 4th year and above: 20 days
   }
 }
 
