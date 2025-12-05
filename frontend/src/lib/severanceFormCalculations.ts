@@ -459,8 +459,41 @@ export function calculateCesantiaProportionalDays(
 }
 
 /**
+ * Get last anniversary date before or on the given date
+ */
+export function getLastAnniversaryDate(
+  startDate: string | Date,
+  beforeDate: string | Date
+): Date {
+  if (!startDate || !beforeDate) return new Date();
+  
+  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+  const before = typeof beforeDate === 'string' ? new Date(beforeDate) : beforeDate;
+  
+  if (isNaN(start.getTime()) || isNaN(before.getTime())) {
+    return new Date();
+  }
+  
+  const startMonth = start.getMonth();
+  const startDay = start.getDate();
+  const beforeYear = before.getFullYear();
+  const beforeMonth = before.getMonth();
+  const beforeDay = before.getDate();
+  
+  // Create anniversary for the year of the "before" date
+  let lastAnniversary = new Date(beforeYear, startMonth, startDay);
+  
+  // If anniversary hasn't occurred yet this year, use previous year's anniversary
+  if (beforeMonth < startMonth || (beforeMonth === startMonth && beforeDay < startDay)) {
+    lastAnniversary = new Date(beforeYear - 1, startMonth, startDay);
+  }
+  
+  return lastAnniversary;
+}
+
+/**
  * Calculate proportional vacation days
- * Formula: total days worked from startDate to terminationDate (year=360 days, month=30 days, plus remaining days),
+ * Formula: total days worked since last anniversary to terminationDate (year=360, month=30, plus remaining days),
  * add 1 day, then * vacationDaysEntitlement / 360
  */
 export function calculateVacationProportionalDays(
@@ -470,8 +503,11 @@ export function calculateVacationProportionalDays(
 ): number {
   if (!startDate || !terminationDate || !vacationDaysEntitlement) return 0;
   
-  // Calculate service period (using 360 days/year, 30 days/month)
-  const servicePeriod = calculateServicePeriod(startDate, terminationDate);
+  // Get last anniversary before termination date
+  const lastAnniversary = getLastAnniversaryDate(startDate, terminationDate);
+  
+  // Calculate service period from last anniversary to termination (using 360 days/year, 30 days/month)
+  const servicePeriod = calculateServicePeriod(lastAnniversary, terminationDate);
   
   // Total days = (years * 360) + (months * 30) + days, then add 1 day
   const totalDays = servicePeriod.totalDays + 1;
