@@ -24,14 +24,14 @@
  */
 export function calculateVacationEntitlement(
   startDate: Date | string | null,
-  currentDate: Date = new Date()
+  currentDate: Date | string = new Date()
 ): number {
   if (!startDate) {
     return 0; // No start date = no vacation entitlement
   }
 
   const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  const current = currentDate;
+  const current = typeof currentDate === 'string' ? new Date(currentDate) : currentDate;
 
   // Check if employee has completed 90-day trial period
   const daysSinceStart = Math.floor(

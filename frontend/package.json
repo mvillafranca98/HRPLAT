@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "generate:severance-template": "tsx scripts/create-excel-template.ts",
-    "generate:severance": "tsx scripts/generate-from-excel.ts"
+    "generate:severance": "tsx scripts/generate-from-excel.ts",
+    "test:severance": "tsx src/scripts/test-severance-calc.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",

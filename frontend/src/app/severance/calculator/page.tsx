@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+// Import working calculations (do not modify these)
 import {
   calculatePreavisoDays,
   calculateRequiredPreavisoDays,
   calculateTerminationDateFromPreaviso,
-  calculateVacationProportionalDays,
   calculateCesantiaDays,
-  calculateCesantiaProportionalDays,
   getLastJanuary1st,
   calculateThirteenthMonthDays,
   getJanuary1stOfTerminationYear,
@@ -16,6 +15,12 @@ import {
   calculateFourteenthMonthDays,
   getJuly1stOfTerminationYear,
   formatDateForInput,
+} from '@/lib/severanceFormCalculationsWorking';
+
+// Import problematic calculations (these need to be fixed)
+import {
+  calculateVacationProportionalDays,
+  calculateCesantiaProportionalDays,
 } from '@/lib/severanceFormCalculations';
 
 interface SalaryHistory {
