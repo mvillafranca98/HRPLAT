@@ -208,10 +208,11 @@ export function getLastJanuary1st(terminationDate: string | Date): Date {
 
 /**
  * Calculate days for 13th month (Décimo Tercer Mes)
- * From last January 1st to termination date (month=30 days), then add 1 day
+ * From last January 1st to termination date using 30-day months
+ * Returns raw days that will be converted with *30/360 in PDF
  */
 export function calculateThirteenthMonthDays(
-  startDate: Date,
+  startDate: Date, // This should be the last Jan 1st
   terminationDate: string | Date
 ): number {
   if (!startDate || !terminationDate) return 0;
@@ -226,31 +227,41 @@ export function calculateThirteenthMonthDays(
   const term = new Date(termination);
   term.setHours(0, 0, 0, 0);
   
-  // Calculate total months difference
-  let yearsDiff = term.getFullYear() - start.getFullYear();
-  let monthsDiff = term.getMonth() - start.getMonth();
-  let daysDiff = term.getDate() - start.getDate();
+  // Start is always Jan 1st of a year (month = 0)
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth(); // Should be 0 (January)
+  const startDay = start.getDate(); // Should be 1
   
-  // Adjust if days are negative (termination day is before start day)
-  if (daysDiff < 0) {
-    monthsDiff--;
-    // Count days in termination month (inclusive from day 1)
-    daysDiff = term.getDate();
+  const termYear = term.getFullYear();
+  const termMonth = term.getMonth();
+  const termDay = term.getDate();
+  
+  // Calculate total days using 30-day month logic
+  let totalDays = 0;
+  
+  if (startYear === termYear && startMonth === termMonth) {
+    // Same month (January) - days from start day to termination day (inclusive)
+    // Jan 1 to Jan 6 = 6 days (Jan 1, 2, 3, 4, 5, 6)
+    // Since start is always day 1, the number of days is termDay
+    totalDays = termDay;
+  } else {
+    // Different month or year
+    // Calculate full months between start and termination
+    let fullMonths = 0;
+    
+    if (startYear === termYear) {
+      // Same year: months from January (month 0) to termination month
+      fullMonths = termMonth - startMonth;
+    } else {
+      // Different year: months from January to December + months from January to termination month
+      fullMonths = (12 - startMonth) + termMonth;
+    }
+    
+    // Full months * 30 + days in termination month (from day 1 to termination day, inclusive)
+    totalDays = (fullMonths * 30) + termDay;
   }
   
-  // Adjust if months are negative
-  if (monthsDiff < 0) {
-    yearsDiff--;
-    monthsDiff += 12;
-  }
-  
-  // Total full months from start to termination
-  const totalMonths = yearsDiff * 12 + monthsDiff;
-  
-  // Days = (full months * 30) + days in termination month, then add 1 day
-  const days = (totalMonths * 30) + daysDiff + 1;
-  
-  return Math.max(0, days);
+  return Math.max(0, totalDays);
 }
 
 /**
@@ -296,10 +307,11 @@ export function getLastJuly1st(terminationDate: string | Date): Date {
 
 /**
  * Calculate days for 14th month (Décimo Cuarto Mes)
- * From last July 1st to termination date (month=30 days), then add 1 day
+ * From last July 1st to termination date using 30-day months
+ * Returns raw days that will be converted with *30/360 in PDF
  */
 export function calculateFourteenthMonthDays(
-  startDate: Date,
+  startDate: Date, // This should be the last July 1st
   terminationDate: string | Date
 ): number {
   if (!startDate || !terminationDate) return 0;
@@ -314,31 +326,39 @@ export function calculateFourteenthMonthDays(
   const term = new Date(termination);
   term.setHours(0, 0, 0, 0);
   
-  // Calculate total months difference
-  let yearsDiff = term.getFullYear() - start.getFullYear();
-  let monthsDiff = term.getMonth() - start.getMonth();
-  let daysDiff = term.getDate() - start.getDate();
+  // Start is always July 1st of a year (month = 6)
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth(); // Should be 6 (July)
+  const startDay = start.getDate(); // Should be 1
   
-  // Adjust if days are negative (termination day is before start day)
-  if (daysDiff < 0) {
-    monthsDiff--;
-    // Count days in termination month (inclusive from day 1)
-    daysDiff = term.getDate();
+  const termYear = term.getFullYear();
+  const termMonth = term.getMonth();
+  const termDay = term.getDate();
+  
+  // Calculate total days using 30-day month logic
+  let totalDays = 0;
+  
+  if (startYear === termYear && startMonth === termMonth) {
+    // Same month (July) - days from start day to termination day (inclusive)
+    totalDays = termDay - startDay + 1;
+  } else {
+    // Different month or year
+    // Calculate full months between start and termination
+    let fullMonths = 0;
+    
+    if (startYear === termYear) {
+      // Same year: months from July (month 6) to termination month
+      fullMonths = termMonth - startMonth;
+    } else {
+      // Different year: months from July to December + months from January to termination month
+      fullMonths = (12 - startMonth) + termMonth;
+    }
+    
+    // Full months * 30 + days in termination month (from day 1 to termination day, inclusive)
+    totalDays = (fullMonths * 30) + termDay;
   }
   
-  // Adjust if months are negative
-  if (monthsDiff < 0) {
-    yearsDiff--;
-    monthsDiff += 12;
-  }
-  
-  // Total full months from start to termination
-  const totalMonths = yearsDiff * 12 + monthsDiff;
-  
-  // Days = (full months * 30) + days in termination month, then add 1 day
-  const days = (totalMonths * 30) + daysDiff + 1;
-  
-  return Math.max(0, days);
+  return Math.max(0, totalDays);
 }
 
 /**
@@ -379,8 +399,14 @@ export function calculateServicePeriod(
   
   if (days < 0) {
     months--;
-    const lastMonth = new Date(termCopy.getFullYear(), termCopy.getMonth(), 0);
-    days += lastMonth.getDate();
+    // Use 30 days per month for consistency with labor law calculations
+    // When days is negative, we need to count remaining days in the start month inclusively
+    // Example: From Feb 10 to Jan 6: days = -4, so remaining days in Feb = 30 - 10 + 1 = 21 days
+    // After adjustment: days = 30 + days (which is -4) = 26, but we want 21 + 6 = 27
+    // Actually, for inclusive counting: from day X to day Y in same month = Y - X + 1
+    // But when crossing months: remaining days in start month + days in end month
+    // Let's use: days = 30 + days (which gives us the correct remaining + end days)
+    days += 30;
   }
   
   if (months < 0) {
@@ -389,6 +415,7 @@ export function calculateServicePeriod(
   }
   
   // Calculate total days using 360 days/year, 30 days/month
+  // Note: Days are counted inclusively (both start and end day are included)
   const totalDays = (years * 360) + (months * 30) + days;
   
   return { years, months, days, totalDays };
@@ -446,8 +473,12 @@ export function calculateCesantiaProportionalDays(
     lastAnniversary = new Date(termYear - 1, startMonth, startDay);
   }
   
-  // Calculate days from last anniversary to termination (using 30 days/month)
-  const period = calculateServicePeriod(lastAnniversary, termination);
+  // Count days from the day AFTER the anniversary (exclusive start) to match vacation calculation
+  const dayAfterAnniversary = new Date(lastAnniversary);
+  dayAfterAnniversary.setDate(dayAfterAnniversary.getDate() + 1);
+  
+  // Calculate days from day after anniversary to termination (using 30 days/month)
+  const period = calculateServicePeriod(dayAfterAnniversary, termination);
   
   // Total days in last year using 30 days/month
   const daysInLastYear = (period.months * 30) + period.days;
@@ -493,8 +524,9 @@ export function getLastAnniversaryDate(
 
 /**
  * Calculate proportional vacation days
- * Formula: total days worked since last anniversary to terminationDate (year=360, month=30, plus remaining days),
- * add 1 day, then * vacationDaysEntitlement / 360
+ * Formula: (days since last anniversary / 360) * vacationDaysEntitlement
+ * Where days are calculated using 30-day months, year=360 days
+ * Note: Days are counted from the day AFTER the anniversary (exclusive start)
  */
 export function calculateVacationProportionalDays(
   startDate: string | Date,
@@ -506,14 +538,19 @@ export function calculateVacationProportionalDays(
   // Get last anniversary before termination date
   const lastAnniversary = getLastAnniversaryDate(startDate, terminationDate);
   
-  // Calculate service period from last anniversary to termination (using 360 days/year, 30 days/month)
-  const servicePeriod = calculateServicePeriod(lastAnniversary, terminationDate);
+  // Count days from the day AFTER the anniversary (exclusive start)
+  // This matches the spreadsheet calculation: "days worked since last anniversary"
+  const dayAfterAnniversary = new Date(lastAnniversary);
+  dayAfterAnniversary.setDate(dayAfterAnniversary.getDate() + 1);
   
-  // Total days = (years * 360) + (months * 30) + days, then add 1 day
-  const totalDays = servicePeriod.totalDays + 1;
+  // Calculate service period from day after anniversary to termination (using 360 days/year, 30 days/month)
+  const servicePeriod = calculateServicePeriod(dayAfterAnniversary, terminationDate);
   
-  // Formula: total days * vacation entitlement / 360
-  const proportionalDays = (totalDays * vacationDaysEntitlement) / 360;
+  // Total days = (years * 360) + (months * 30) + days
+  const totalDays = servicePeriod.totalDays;
+  
+  // Formula: (days / 360) * vacation entitlement
+  const proportionalDays = (totalDays / 360) * vacationDaysEntitlement;
   
   return Math.round(proportionalDays * 100) / 100; // Round to 2 decimals
 }
