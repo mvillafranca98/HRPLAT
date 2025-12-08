@@ -527,6 +527,8 @@ export function getLastAnniversaryDate(
  * Formula: (days since last anniversary / 360) * vacationDaysEntitlement
  * Where days are calculated using 30-day months, year=360 days
  * Note: Days are counted from the day AFTER the anniversary (exclusive start)
+ * Formula: total days worked since last anniversary to terminationDate (year=360, month=30, plus remaining days),
+ * add 1 day, then * vacationDaysEntitlement / 360
  */
 export function calculateVacationProportionalDays(
   startDate: string | Date,
@@ -545,6 +547,8 @@ export function calculateVacationProportionalDays(
   
   // Calculate service period from day after anniversary to termination (using 360 days/year, 30 days/month)
   const servicePeriod = calculateServicePeriod(dayAfterAnniversary, terminationDate);
+  // Calculate service period from last anniversary to termination (using 360 days/year, 30 days/month)
+  const servicePeriod = calculateServicePeriod(lastAnniversary, terminationDate);
   
   // Total days = (years * 360) + (months * 30) + days
   const totalDays = servicePeriod.totalDays;
