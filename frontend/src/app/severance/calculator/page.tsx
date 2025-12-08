@@ -332,11 +332,9 @@ export default function SeveranceCalculator() {
     );
     
     // Calculate 14th Month (Décimo Cuarto Mes) - NOW USES JULY 1ST
-    // Start date: July 1st of termination year
-    const fourteenthMonthStart = getJuly1stOfTerminationYear(terminationDateForMonths);
-    const fourteenthMonthStartDateStr = formatDateForInput(fourteenthMonthStart);
-    // For calculation: use last July 1st (most recent before termination)
+    // For calculation and display: use last July 1st (most recent before termination)
     const lastJuly1st = getLastJuly1st(terminationDateForMonths);
+    const fourteenthMonthStartDateStr = formatDateForInput(lastJuly1st);
     const fourteenthMonthDays = calculateFourteenthMonthDays(
       lastJuly1st,
       terminationDateForMonths

@@ -136,7 +136,7 @@ function calculateSalaryAverages(salaryHistory: Array<{ amount: number; overtime
   const baseMonthly = salaries[salaries.length - 1] || baseAverage;
   const promAverage = (baseMonthly * 14) / 12;
   const promDaily = promAverage / 30;
-  const baseDaily = baseAverage / 30;
+  const baseDaily = baseMonthly / 30; // Use baseMonthly, not baseAverage
   
   return {
     baseMonthly,
@@ -279,11 +279,13 @@ export async function generateSeverancePDFFromForm(
   const vacationProDays = roundTo2Decimals(formData.vacationProportionalDays);
   const vacationProPay = roundCurrency(vacationProDays * salaryAvgs.promDaily);
   
+  // DECIMO TERCER MES: use (thirteenthMonthDays * 30 / 360) días x baseDaily
   const thirteenthDays = roundTo2Decimals((formData.thirteenthMonthDays * 30) / 360);
-  const thirteenthPay = roundCurrency(thirteenthDays * (salaryAvgs.baseMonthly / 30));
+  const thirteenthPay = roundCurrency(thirteenthDays * salaryAvgs.baseDaily);
   
+  // DECIMO CUARTO MES: use (fourteenthMonthDays * 30 / 360) días x baseDaily
   const fourteenthDays = roundTo2Decimals((formData.fourteenthMonthDays * 30) / 360);
-  const fourteenthPay = roundCurrency(fourteenthDays * (salaryAvgs.baseMonthly / 30));
+  const fourteenthPay = roundCurrency(fourteenthDays * salaryAvgs.baseDaily);
   
   const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + vacationPay + vacationBonusPay + 
                         vacationProPay + thirteenthPay + fourteenthPay + formData.salariesDue + 
@@ -412,12 +414,11 @@ export async function generateSeverancePDFFromForm(
     nextRow(tableLineHeight);
   }
   
-  // DECIMO TERCER MES
-  const monthlyDailyRate = salaryAvgs.baseMonthly / 30;
+  // DECIMO TERCER MES - Use baseDaily for rate display
   drawText('DECIMO TERCER MES', cols.label, yPosition, 10, false);
   drawText(formatNumber(thirteenthDays, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
-  drawTextRight(formatCurrency(monthlyDailyRate).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(salaryAvgs.baseDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(thirteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(tableLineHeight);
   
@@ -428,11 +429,11 @@ export async function generateSeverancePDFFromForm(
     nextRow(tableLineHeight);
   }
   
-  // DECIMO CUARTO MES
+  // DECIMO CUARTO MES - Use baseDaily for rate display
   drawText('DECIMO CUARTO MES', cols.label, yPosition, 10, false);
   drawText(formatNumber(fourteenthDays, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
-  drawTextRight(formatCurrency(monthlyDailyRate).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
+  drawTextRight(formatCurrency(salaryAvgs.baseDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(fourteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(tableLineHeight);
   
