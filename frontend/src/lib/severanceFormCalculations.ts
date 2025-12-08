@@ -27,8 +27,17 @@ export function calculateServicePeriod(
     return { years: 0, months: 0, days: 0, totalDays: 0 };
   }
   
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  const termination = typeof terminationDate === 'string' ? new Date(terminationDate) : terminationDate;
+  // Helper to parse date strings without timezone issues
+  const parseDate = (date: string | Date): Date => {
+    if (typeof date === 'string') {
+      const [year, month, day] = date.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    return date;
+  };
+  
+  const start = parseDate(startDate);
+  const termination = parseDate(terminationDate);
   
   if (isNaN(start.getTime()) || isNaN(termination.getTime())) {
     return { years: 0, months: 0, days: 0, totalDays: 0 };
@@ -78,8 +87,17 @@ export function getLastAnniversaryDate(
 ): Date {
   if (!startDate || !beforeDate) return new Date();
   
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  const before = typeof beforeDate === 'string' ? new Date(beforeDate) : beforeDate;
+  // Helper to parse date strings without timezone issues
+  const parseDate = (date: string | Date): Date => {
+    if (typeof date === 'string') {
+      const [year, month, day] = date.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    return date;
+  };
+  
+  const start = parseDate(startDate);
+  const before = parseDate(beforeDate);
   
   if (isNaN(start.getTime()) || isNaN(before.getTime())) {
     return new Date();
@@ -113,9 +131,18 @@ export function calculateCesantiaProportionalDays(
 ): number {
   if (!startDate || !terminationDate) return 0;
   
+  // Helper to parse date strings without timezone issues
+  const parseDate = (date: string | Date): Date => {
+    if (typeof date === 'string') {
+      const [year, month, day] = date.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    return date;
+  };
+  
   // Get last anniversary (start of current year of service)
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  const termination = typeof terminationDate === 'string' ? new Date(terminationDate) : terminationDate;
+  const start = parseDate(startDate);
+  const termination = parseDate(terminationDate);
   
   if (isNaN(start.getTime()) || isNaN(termination.getTime())) {
     return 0;
@@ -143,8 +170,9 @@ export function calculateCesantiaProportionalDays(
   // Calculate days from day after anniversary to termination (using 30 days/month)
   const period = calculateServicePeriod(dayAfterAnniversary, termination);
   
+  // Use totalDays directly from calculateServicePeriod which already calculates correctly
   // Total days in last year using 30 days/month
-  const daysInLastYear = (period.months * 30) + period.days;
+  const daysInLastYear = period.totalDays;
   
   // Formula: days in last year * 30 / 360
   const cesantiaProDays = (daysInLastYear * 30) / 360;

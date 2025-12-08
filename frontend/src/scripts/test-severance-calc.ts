@@ -24,6 +24,7 @@ import {
 import {
   calculateCesantiaProportionalDays,
   calculateVacationProportionalDays,
+  getLastAnniversaryDate,
 } from '../lib/severanceFormCalculations';
 
 import { calculateVacationEntitlement } from '../lib/vacationBalance';
@@ -43,6 +44,12 @@ function calculateSalaryAverages(monthlySalary: number) {
   };
 }
 
+// Helper function to parse local date string (YYYY-MM-DD) without timezone issues
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed
+}
+
 // Helper function to format currency
 function formatCurrency(amount: number): string {
   return `L. ${amount.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -50,7 +57,7 @@ function formatCurrency(amount: number): string {
 
 // Helper function to format date
 function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? parseLocalDate(date) : date;
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -59,8 +66,8 @@ function formatDate(date: Date | string): string {
 
 // Helper function to calculate service period display
 function calculateServicePeriodDisplay(startDate: string, terminationDate: string): string {
-  const start = new Date(startDate);
-  const termination = new Date(terminationDate);
+  const start = parseLocalDate(startDate);
+  const termination = parseLocalDate(terminationDate);
   
   let years = termination.getFullYear() - start.getFullYear();
   let months = termination.getMonth() - start.getMonth();
@@ -117,6 +124,9 @@ function calculateSeverancePayments(
   const lastJuly1st = getLastJuly1st(terminationDate);
   const fourteenthMonthDays = calculateFourteenthMonthDays(lastJuly1st, terminationDate);
   const fourteenthDaysConverted = (fourteenthMonthDays * 30) / 360;
+
+  // Get last anniversary for vacation proportional display
+  const lastAnniversary = getLastAnniversaryDate(startDate, terminationDate);
   
   // Calculate payments
   const preavisoPay = preavisoDays * salaryAvgs.promDaily;
@@ -153,6 +163,7 @@ function calculateSeverancePayments(
     totalPrestaciones,
     lastJan1st,
     lastJuly1st,
+    lastAnniversary,
   };
 }
 
@@ -186,7 +197,7 @@ function printResults(results: ReturnType<typeof calculateSeverancePayments>, st
   
   console.log(`Vacaciones Proporcionales:`);
   console.log(`  ${results.vacationProportionalDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationProPay)}`);
-  console.log(`  (Desde: ${formatDate(results.lastJan1st)} Hasta: ${formatDate(terminationDate)})\n`);
+  console.log(`  (Desde: ${formatDate(results.lastAnniversary)} Hasta: ${formatDate(terminationDate)})\n`);
   
   console.log(`Décimo Tercer Mes:`);
   console.log(`  ${results.thirteenthDaysConverted.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.baseDaily)} = ${formatCurrency(results.thirteenthPay)}`);
@@ -228,14 +239,14 @@ async function runInteractive() {
       }
       
       const startDateStr = await askQuestion('Fecha de Ingreso (YYYY-MM-DD): ');
-      const startDate = new Date(startDateStr);
+      const startDate = parseLocalDate(startDateStr);
       
       if (isNaN(startDate.getTime())) {
         throw new Error('Fecha de ingreso inválida');
       }
       
       const terminationDateStr = await askQuestion('Fecha de Retiro (YYYY-MM-DD): ');
-      const terminationDate = new Date(terminationDateStr);
+      const terminationDate = parseLocalDate(terminationDateStr);
       
       if (isNaN(terminationDate.getTime())) {
         throw new Error('Fecha de retiro inválida');
@@ -248,15 +259,15 @@ async function runInteractive() {
       
       const results = calculateSeverancePayments(
         monthlySalary,
-        startDate.toISOString().split('T')[0],
-        terminationDate.toISOString().split('T')[0],
+        startDateStr,
+        terminationDateStr,
         vacationDaysRemaining || 0
       );
       
       printResults(
         results,
-        startDate.toISOString().split('T')[0],
-        terminationDate.toISOString().split('T')[0],
+        startDateStr,
+        terminationDateStr,
         monthlySalary
       );
       

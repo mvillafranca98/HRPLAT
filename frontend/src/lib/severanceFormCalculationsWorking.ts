@@ -202,7 +202,10 @@ export function getLastJanuary1st(terminationDate: string | Date): Date {
   if (!terminationDate) return new Date();
   
   const termination = typeof terminationDate === 'string'
-    ? new Date(terminationDate)
+    ? (() => {
+        const [year, month, day] = terminationDate.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      })()
     : terminationDate;
   
   const year = termination.getFullYear();
@@ -232,7 +235,10 @@ export function calculateThirteenthMonthDays(
   if (!startDate || !terminationDate) return 0;
   
   const termination = typeof terminationDate === 'string'
-    ? new Date(terminationDate)
+    ? (() => {
+        const [year, month, day] = terminationDate.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      })()
     : terminationDate;
   
   // Set both dates to midnight
@@ -286,7 +292,10 @@ export function getJuly1stOfTerminationYear(terminationDate: string | Date): Dat
   if (!terminationDate) return new Date();
   
   const termination = typeof terminationDate === 'string'
-    ? new Date(terminationDate)
+    ? (() => {
+        const [year, month, day] = terminationDate.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      })()
     : terminationDate;
   
   const year = termination.getFullYear();
@@ -301,7 +310,10 @@ export function getLastJuly1st(terminationDate: string | Date): Date {
   if (!terminationDate) return new Date();
   
   const termination = typeof terminationDate === 'string'
-    ? new Date(terminationDate)
+    ? (() => {
+        const [year, month, day] = terminationDate.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      })()
     : terminationDate;
   
   const year = termination.getFullYear();
@@ -331,7 +343,10 @@ export function calculateFourteenthMonthDays(
   if (!startDate || !terminationDate) return 0;
   
   const termination = typeof terminationDate === 'string'
-    ? new Date(terminationDate)
+    ? (() => {
+        const [year, month, day] = terminationDate.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      })()
     : terminationDate;
   
   // Set both dates to midnight
