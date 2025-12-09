@@ -78,6 +78,12 @@ export function calculateServicePeriod(
   if (months < 0) {
     years--;
     months += 12;
+    // When months wrap around (crossing year boundary), we need to add 1 day
+    // for inclusive counting if days is positive
+    // Example: Feb 5 to Jan 7: months wraps, days=2, but should count inclusively
+    if (days >= 0) {
+      days += 1; // Add 1 for inclusive counting when crossing year boundary
+    }
   }
   
   // Calculate total days using 360 days/year, 30 days/month
