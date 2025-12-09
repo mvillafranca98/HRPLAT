@@ -315,6 +315,9 @@ export default function SeveranceCalculator() {
       cesantiaProportionalDays,
       vacationProportionalDays,
     }));
+    
+    // DEBUG: Log the value being set
+    console.log('DEBUG Setting cesantiaProportionalDays in form:', cesantiaProportionalDays);
   }, [startDate, terminationDate, vacationDaysEntitlement]);
 
   // Auto-calculate 13th and 14th month when termination date changes

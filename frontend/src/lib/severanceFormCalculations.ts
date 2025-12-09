@@ -53,16 +53,26 @@ export function calculateServicePeriod(
   let months = termCopy.getMonth() - startCopy.getMonth();
   let days = termCopy.getDate() - startCopy.getDate();
   
+  // Adjust for negative days
   if (days < 0) {
     months--;
-    // Use 30 days per month for consistency with labor law calculations
-    // When days is negative, we need to count remaining days in the start month inclusively
-    // Example: From Feb 10 to Jan 6: days = -4, so remaining days in Feb = 30 - 10 + 1 = 21 days
-    // After adjustment: days = 30 + days (which is -4) = 26, but we want 21 + 6 = 27
-    // Actually, for inclusive counting: from day X to day Y in same month = Y - X + 1
-    // But when crossing months: remaining days in start month + days in end month
-    // Let's use: days = 30 + days (which gives us the correct remaining + end days)
-    days += 30;
+    // When crossing months, calculate remaining days in start month + days in end month
+    // Example: From Feb 11 to Jan 6:
+    // - Remaining days in Feb (Feb 11-30) = 30 - 11 + 1 = 20 days
+    // - Days in Jan (Jan 1-6) = 6 days
+    // - Total = 20 + 6 = 26 days
+    // But with 30-day month logic: (30 - startDay + 1) + endDay
+    // = (30 - 11 + 1) + 6 = 20 + 6 = 26
+    // However, we're using days = 30 + days, where days = -5
+    // So: 30 + (-5) = 25, which is off by 1
+    
+    // The correct formula when using 30-day months:
+    // Remaining days in start month = 30 - startDay + 1 (if inclusive from startDay)
+    // But since we want to count FROM startDay (inclusive) TO endDay (inclusive)
+    // in a 30-day month system: days = (30 - startDay + 1) + endDay
+    // = 30 - startDay + 1 + endDay = 30 + (endDay - startDay) + 1
+    // = 30 + days + 1 (since days = endDay - startDay, which is negative)
+    days = 30 + days + 1; // Add 1 to account for inclusive counting
   }
   
   if (months < 0) {
@@ -75,6 +85,7 @@ export function calculateServicePeriod(
   const totalDays = (years * 360) + (months * 30) + days;
   
   return { years, months, days, totalDays };
+  
 }
 
 /**
@@ -170,6 +181,14 @@ export function calculateCesantiaProportionalDays(
   // Calculate days from day after anniversary to termination (using 30 days/month)
   const period = calculateServicePeriod(dayAfterAnniversary, termination);
   
+  // DEBUG: Log period details
+  console.log('DEBUG Period Calculation (Cesantia Proporcional):', {
+    dayAfterAnniversary: dayAfterAnniversary.toISOString().split('T')[0],
+    termination: termination.toISOString().split('T')[0],
+    period,
+    totalDays: period.totalDays
+  });
+  
   // Use totalDays directly from calculateServicePeriod which already calculates correctly
   // Total days in last year using 30 days/month
   const daysInLastYear = period.totalDays;
@@ -177,7 +196,15 @@ export function calculateCesantiaProportionalDays(
   // Formula: days in last year * 30 / 360
   const cesantiaProDays = (daysInLastYear * 30) / 360;
   
-  return Math.round(cesantiaProDays * 100) / 100; // Round to 2 decimals
+  // DEBUG: Log intermediate values
+  console.log('DEBUG Cesantia Proporcional Calculation:', {
+    daysInLastYear,
+    calculation: `${daysInLastYear} * 30 / 360`,
+    rawResult: cesantiaProDays,
+    rounded: Math.round(cesantiaProDays * 100) / 100
+  });
+  
+  return Math.round(cesantiaProDays * 100) / 100; // Round to 2 decimals 
 }
 
 /**
