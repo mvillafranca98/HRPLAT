@@ -45,7 +45,13 @@ interface SeveranceFormData {
  */
 function formatDate(dateString: string): string {
   if (!dateString) return '';
-  const date = new Date(dateString);
+  
+  const parseLocalDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day); 
+  };
+  
+  const date = parseLocalDate(dateString);
   if (isNaN(date.getTime())) return '';
   
   const day = String(date.getDate()).padStart(2, '0');
