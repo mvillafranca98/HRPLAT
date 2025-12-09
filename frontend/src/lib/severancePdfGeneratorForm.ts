@@ -15,6 +15,7 @@ interface SeveranceFormData {
   lastAnniversaryDate: string;
   vacationDaysRemaining: number;
   vacationDaysEntitlement: number;
+  cumulativeVacationEntitlement: number;
   salaryHistory: Array<{
     month: string;
     year: number;
@@ -279,7 +280,8 @@ export async function generateSeverancePDFFromForm(
   const preavisoPay = roundCurrency(formData.preavisoDays * salaryAvgs.promDaily);
   const cesantiaPay = roundCurrency(formData.cesantiaDays * salaryAvgs.promDaily);
   const cesantiaProPay = roundCurrency(formData.cesantiaProportionalDays * salaryAvgs.promDaily);
-  const vacationPay = roundCurrency(formData.vacationDaysRemaining * salaryAvgs.promDaily);
+  // VACACIONES: Use cumulative total (stacked across all years)
+  const cumulativeVacationPay = roundCurrency(formData.cumulativeVacationEntitlement * salaryAvgs.promDaily);
   const vacationBonusPay = roundCurrency(formData.vacationBonusDays * salaryAvgs.promDaily);
   
   const vacationProDays = roundTo2Decimals(formData.vacationProportionalDays);
@@ -293,7 +295,7 @@ export async function generateSeverancePDFFromForm(
   const fourteenthDays = roundTo2Decimals((formData.fourteenthMonthDays * 30) / 360);
   const fourteenthPay = roundCurrency(fourteenthDays * salaryAvgs.baseDaily);
   
-  const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + vacationPay + vacationBonusPay + 
+  const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + cumulativeVacationPay + vacationBonusPay + 
                         vacationProPay + thirteenthPay + fourteenthPay + formData.salariesDue + 
                         formData.overtimeDue + formData.otherPayments + formData.seventhDayPayment + 
                         formData.wageAdjustment + formData.educationalBonus;
@@ -395,12 +397,12 @@ export async function generateSeverancePDFFromForm(
   drawTextRight(formatCurrency(cesantiaProPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(tableLineHeight);
   
-  // VACACIONES
+  // VACACIONES - Use cumulative total (stacked across all years)
   drawText('VACACIONES', cols.label, yPosition, 10, false);
-  drawText(formatNumber(formData.vacationDaysRemaining, 2), cols.days, yPosition, 10, false);
+  drawText(formatNumber(formData.cumulativeVacationEntitlement, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
   drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
-  drawTextRight(formatCurrency(vacationPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
+  drawTextRight(formatCurrency(cumulativeVacationPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
   nextRow(tableLineHeight);
   
   // VACACIONES PROPORCIONALES

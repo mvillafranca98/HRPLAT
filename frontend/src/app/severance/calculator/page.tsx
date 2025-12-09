@@ -42,6 +42,7 @@ interface SeveranceFormData {
   // Vacation Info
   vacationDaysRemaining: number;
   vacationDaysEntitlement: number;
+  cumulativeVacationEntitlement: number;
   
   // Salary Info
   salaryHistory: SalaryHistory[];
@@ -95,6 +96,7 @@ export default function SeveranceCalculator() {
     lastAnniversaryDate: '',
     vacationDaysRemaining: 0,
     vacationDaysEntitlement: 0,
+    cumulativeVacationEntitlement: 0,
     salaryHistory: [],
     preavisoDays: 30,
     cesantiaDays: 0,
@@ -225,6 +227,7 @@ export default function SeveranceCalculator() {
           lastAnniversaryDate: data.lastAnniversaryDate || '',
           vacationDaysRemaining: data.vacationDaysRemaining || 0,
           vacationDaysEntitlement: data.vacationDaysEntitlement || 0,
+          cumulativeVacationEntitlement: data.cumulativeVacationEntitlement || 0,
           salaryHistory: data.salaryHistory || [],
           preavisoDays: requiredPreavisoDays,
           terminationDate: terminationDateStr,

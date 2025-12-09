@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateVacationDaysForSeverance } from '@/lib/severanceCalculation';
-import { calculateVacationEntitlement } from '@/lib/vacationBalance';
+import { calculateVacationEntitlement, calculateCumulativeVacationEntitlement } from '@/lib/vacationBalance';
 
 // Helper function to get last anniversary
 function getLastAnniversary(startDate: Date, currentDate: Date): Date {
@@ -95,8 +95,11 @@ export async function GET(request: NextRequest) {
       }))
     );
 
-    // Calculate vacation entitlement
+    // Calculate vacation entitlement (current cycle)
     const vacationEntitlement = calculateVacationEntitlement(startDate, currentDate);
+
+    // Calculate cumulative vacation entitlement (stacked across all years)
+    const cumulativeVacationEntitlement = calculateCumulativeVacationEntitlement(startDate, currentDate);
 
     // Get salary history from contracts
     // If there are contracts, use them; otherwise, use the last contract's salary for last 6 months
@@ -137,7 +140,8 @@ export async function GET(request: NextRequest) {
       startDate: employee.startDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
       lastAnniversaryDate: lastAnniversary.toISOString().split('T')[0],
       vacationDaysRemaining: vacationInfo.daysRemaining,
-      vacationDaysEntitlement: vacationEntitlement,
+      vacationDaysEntitlement: vacationEntitlement, // Current cycle entitlement (for proportional calculation)
+      cumulativeVacationEntitlement: cumulativeVacationEntitlement, // Cumulative total (for Vacaciones section)
       salaryHistory,
     });
   } catch (error: any) {

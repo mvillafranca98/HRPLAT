@@ -88,6 +88,83 @@ export function calculateVacationEntitlement(
 }
 
 /**
+ * Calculate cumulative/stacked vacation entitlement across all completed years
+ * This sums up all vacation days earned through each completed year
+ * 
+ * Example: 3 years 113 days → 10 + 12 + 15 = 37 days total
+ * 
+ * @param startDate - Employee start date
+ * @param currentDate - Current date (defaults to today)
+ * @returns Cumulative total of all vacation days earned
+ */
+export function calculateCumulativeVacationEntitlement(
+  startDate: Date | string | null,
+  currentDate: Date | string = new Date()
+): number {
+  if (!startDate) {
+    return 0;
+  }
+
+  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+  const current = typeof currentDate === 'string' ? new Date(currentDate) : currentDate;
+
+  // Check if employee has completed 90-day trial period
+  const daysSinceStart = Math.floor(
+    (current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  
+  if (daysSinceStart < 90) {
+    return 0; // Still in trial period
+  }
+
+  // Calculate completed full years of service
+  const startYear = start.getFullYear();
+  const currentYear = current.getFullYear();
+  const startMonth = start.getMonth();
+  const currentMonth = current.getMonth();
+  const startDay = start.getDate();
+  const currentDay = current.getDate();
+
+  let completedYears = currentYear - startYear;
+
+  if (
+    currentMonth < startMonth ||
+    (currentMonth === startMonth && currentDay < startDay)
+  ) {
+    completedYears--;
+  }
+
+  completedYears = Math.max(0, completedYears);
+
+  // Calculate cumulative total by summing entitlements for each completed year
+  // After completion of 1st year: 10 days
+  // After completion of 2nd year: 12 days
+  // After completion of 3rd year: 15 days
+  // After completion of 4th year and above: 20 days each
+  
+  let cumulativeTotal = 0;
+  
+  if (completedYears === 0) {
+    // First year (after 90-day trial): 10 days
+    cumulativeTotal = 10;
+  } else if (completedYears === 1) {
+    // Completed 1 year: 10 days
+    cumulativeTotal = 10;
+  } else if (completedYears === 2) {
+    // Completed 2 years: 10 + 12 = 22 days
+    cumulativeTotal = 10 + 12;
+  } else if (completedYears === 3) {
+    // Completed 3 years: 10 + 12 + 15 = 37 days
+    cumulativeTotal = 10 + 12 + 15;
+  } else {
+    // Completed 4+ years: 10 + 12 + 15 + 20*(completedYears - 3)
+    cumulativeTotal = 10 + 12 + 15 + (20 * (completedYears - 3));
+  }
+
+  return cumulativeTotal;
+}
+
+/**
  * Calculate number of business days between two dates (excluding weekends and holidays)
  * @param startDate - Start date
  * @param endDate - End date
