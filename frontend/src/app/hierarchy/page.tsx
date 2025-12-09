@@ -17,6 +17,7 @@ interface Employee {
     name: string | null;
     email: string;
   } | null;
+  terminationDate: string | null;
   directReports?: Employee[];
 }
 
@@ -167,7 +168,11 @@ export default function HierarchyPage() {
       if (response.ok) {
         const data = await response.json();
         // The API returns { employees: [...], pagination: {...} }
-        const employees = Array.isArray(data.employees) ? data.employees : [];
+        let employees = Array.isArray(data.employees) ? data.employees : [];
+        
+        // Filter out terminated employees (only show active employees)
+        employees = employees.filter((emp: Employee) => !emp.terminationDate);
+        
         setEmployees(employees);
         const hierarchyTree = buildTree(employees);
         setTree(hierarchyTree);

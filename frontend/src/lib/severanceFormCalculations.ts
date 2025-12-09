@@ -197,7 +197,7 @@ export function calculateCesantiaProportionalDays(
   
   // Use totalDays directly from calculateServicePeriod which already calculates correctly
   // Total days in last year using 30 days/month
-  const daysInLastYear = period.totalDays;
+  const daysInLastYear = period.totalDays + 1;
   
   // Formula: days in last year * 30 / 360
   const cesantiaProDays = (daysInLastYear * 30) / 360;
@@ -239,7 +239,7 @@ export function calculateVacationProportionalDays(
   const servicePeriod = calculateServicePeriod(dayAfterAnniversary, terminationDate);
   
   // Total days = (years * 360) + (months * 30) + days
-  const totalDays = servicePeriod.totalDays;
+  const totalDays = servicePeriod.totalDays + 1;
   
   // Formula: (days / 360) * vacation entitlement
   const proportionalDays = (totalDays / 360) * vacationDaysEntitlement;

@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
         email: true,
         role: true,
         reportsToId: true,
+        terminationDate: true,
         reportsTo: {
           select: {
             id: true,
