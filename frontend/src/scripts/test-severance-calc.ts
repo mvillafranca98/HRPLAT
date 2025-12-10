@@ -27,7 +27,7 @@ import {
   getLastAnniversaryDate,
 } from '../lib/severanceFormCalculations';
 
-import { calculateVacationEntitlement } from '../lib/vacationBalance';
+import { calculateVacationEntitlement, calculateCumulativeVacationEntitlement } from '../lib/vacationBalance';
 
 // Helper function to calculate salary averages
 function calculateSalaryAverages(monthlySalary: number) {
@@ -96,8 +96,11 @@ function calculateSeverancePayments(
   // Calculate salary averages
   const salaryAvgs = calculateSalaryAverages(monthlySalary);
   
-  // Calculate vacation entitlement
+  // Calculate vacation entitlement (current cycle - for proportional calculation)
   const vacationEntitlement = calculateVacationEntitlement(startDate, terminationDate);
+  
+  // Calculate cumulative vacation entitlement (stacked across all years - for Vacaciones section)
+  const cumulativeVacationEntitlement = calculateCumulativeVacationEntitlement(startDate, terminationDate);
   
   // Calculate preaviso days
   const preavisoDays = calculateRequiredPreavisoDays(startDate);
@@ -132,7 +135,8 @@ function calculateSeverancePayments(
   const preavisoPay = preavisoDays * salaryAvgs.promDaily;
   const cesantiaPay = cesantiaDays * salaryAvgs.promDaily;
   const cesantiaProPay = cesantiaProportionalDays * salaryAvgs.promDaily;
-  const vacationPay = vacationDaysRemaining * salaryAvgs.promDaily;
+  // VACACIONES: Use cumulative total (stacked across all years) - matching PDF generation
+  const vacationPay = cumulativeVacationEntitlement * salaryAvgs.promDaily;
   const vacationProPay = vacationProportionalDays * salaryAvgs.promDaily;
   const thirteenthPay = thirteenthDaysConverted * salaryAvgs.baseDaily;
   const fourteenthPay = fourteenthDaysConverted * salaryAvgs.baseDaily;
@@ -149,9 +153,10 @@ function calculateSeverancePayments(
     cesantiaPay,
     cesantiaProportionalDays,
     cesantiaProPay,
-    vacationDaysRemaining,
+    vacationDaysRemaining, // Keep for reference
     vacationPay,
-    vacationEntitlement,
+    vacationEntitlement, // Current cycle entitlement (for proportional)
+    cumulativeVacationEntitlement, // Cumulative total (for Vacaciones section)
     vacationProportionalDays,
     vacationProPay,
     thirteenthMonthDays,
@@ -192,8 +197,9 @@ function printResults(results: ReturnType<typeof calculateSeverancePayments>, st
   console.log(`  ${results.cesantiaProportionalDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.cesantiaProPay)}\n`);
   
   console.log(`Vacaciones:`);
-  console.log(`  ${results.vacationDaysRemaining.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationPay)}`);
-  console.log(`  (Entitlement: ${results.vacationEntitlement} días)\n`);
+  // Display cumulative entitlement instead of remaining days - matching PDF generation
+  console.log(`  ${results.cumulativeVacationEntitlement.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationPay)}`);
+  console.log(`  (Entitlement acumulado: ${results.cumulativeVacationEntitlement} días, Entitlement ciclo actual: ${results.vacationEntitlement} días)\n`);
   
   console.log(`Vacaciones Proporcionales:`);
   console.log(`  ${results.vacationProportionalDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationProPay)}`);

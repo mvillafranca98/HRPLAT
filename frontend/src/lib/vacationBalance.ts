@@ -145,8 +145,8 @@ export function calculateCumulativeVacationEntitlement(
   let cumulativeTotal = 0;
   
   if (completedYears === 0) {
-    // First year (after 90-day trial): 10 days
-    cumulativeTotal = 10;
+    // No completed years yet: 0 days (vacation days only accumulate after completing a year)
+    cumulativeTotal = 0;
   } else if (completedYears === 1) {
     // Completed 1 year: 10 days
     cumulativeTotal = 10;
@@ -313,6 +313,20 @@ export function calculateDaysTaken(
   const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
   const current = new Date();
   
+  // Helper function to check if a year is a leap year
+  const isLeapYear = (year: number): boolean => {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  };
+
+  // Helper to create anniversary date handling Feb 29 properly
+  const createAnniversaryDate = (year: number, month: number, day: number): Date => {
+    // If it's February 29th and the target year is not a leap year, use Feb 28
+    if (month === 1 && day === 29 && !isLeapYear(year)) {
+      return new Date(year, 1, 28);
+    }
+    return new Date(year, month, day);
+  };
+
   // Calculate current anniversary year
   const currentYear = current.getFullYear();
   const startMonth = start.getMonth();
@@ -327,13 +341,15 @@ export function calculateDaysTaken(
   // Check if anniversary has passed this year
   if (currentMonth > startMonth || (currentMonth === startMonth && currentDay >= startDay)) {
     // Anniversary already passed - current anniversary year started this year
-    anniversaryYearStart = new Date(currentYear, startMonth, startDay);
-    anniversaryYearEnd = new Date(currentYear + 1, startMonth, startDay);
+    // Handle Feb 29 in non-leap years properly
+    anniversaryYearStart = createAnniversaryDate(currentYear, startMonth, startDay);
+    anniversaryYearEnd = createAnniversaryDate(currentYear + 1, startMonth, startDay);
     anniversaryYearEnd.setDate(anniversaryYearEnd.getDate() - 1); // End day before next anniversary
   } else {
     // Anniversary hasn't passed - current anniversary year started last year
-    anniversaryYearStart = new Date(currentYear - 1, startMonth, startDay);
-    anniversaryYearEnd = new Date(currentYear, startMonth, startDay);
+    // Handle Feb 29 in non-leap years properly
+    anniversaryYearStart = createAnniversaryDate(currentYear - 1, startMonth, startDay);
+    anniversaryYearEnd = createAnniversaryDate(currentYear, startMonth, startDay);
     anniversaryYearEnd.setDate(anniversaryYearEnd.getDate() - 1); // End day before anniversary
   }
 
