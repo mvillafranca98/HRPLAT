@@ -15,6 +15,54 @@
  */
 
 /**
+ * Normalize start date: if it's Feb 29, convert to Feb 28 for calculations
+ * This ensures calculations work correctly while preserving the original date for display
+ * Handles both Date objects and date strings in YYYY-MM-DD format
+ */
+function normalizeStartDateForCalculations(date: Date | string): Date {
+  let d: Date;
+  let originalYear: number;
+  let originalMonth: number;
+  let originalDay: number;
+  
+  if (typeof date === 'string') {
+    // Parse string date (YYYY-MM-DD format)
+    const parts = date.split('-').map(Number);
+    originalYear = parts[0];
+    originalMonth = parts[1]; // 1-12 format
+    originalDay = parts[2];
+    
+    // Check the original string first - if it was Feb 29, normalize to Feb 28
+    if (originalMonth === 2 && originalDay === 29) {
+      return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+    }
+    
+    d = new Date(originalYear, originalMonth - 1, originalDay);
+  } else {
+    d = date;
+    originalYear = d.getFullYear();
+    originalMonth = d.getMonth() + 1; // Convert to 1-12 format
+    originalDay = d.getDate();
+  }
+  
+  // Double-check: if it's February 29th, normalize to February 28th
+  // This handles both Date objects and edge cases
+  if (originalMonth === 2 && originalDay === 29) {
+    return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+  }
+  
+  // Also check the Date object's actual values (handles timezone issues)
+  const month = d.getMonth();
+  const day = d.getDate();
+  if (month === 1 && day === 29) {
+    const year = d.getFullYear();
+    return new Date(year, 1, 28);
+  }
+  
+  return d;
+}
+
+/**
  * Calculate vacation days entitlement based on completed years of service (Honduras law)
  * Entitlement is based on completed full years, not current year being worked.
  * 
@@ -30,7 +78,8 @@ export function calculateVacationEntitlement(
     return 0; // No start date = no vacation entitlement
   }
 
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+  // Normalize start date: Feb 29 → Feb 28 for calculations
+  const start = normalizeStartDateForCalculations(startDate);
   const current = typeof currentDate === 'string' ? new Date(currentDate) : currentDate;
 
   // Check if employee has completed 90-day trial period
@@ -105,9 +154,23 @@ export function calculateCumulativeVacationEntitlement(
     return 0;
   }
 
-  const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+  // Normalize start date: Feb 29 → Feb 28 for calculations
+  const start = normalizeStartDateForCalculations(startDate);
   const current = typeof currentDate === 'string' ? new Date(currentDate) : currentDate;
 
+  // Debug: Log normalization for Feb 29 cases
+  const originalStartStr = typeof startDate === 'string' ? startDate : startDate.toISOString().split('T')[0];
+  const normalizedStartStr = start.toISOString().split('T')[0];
+  const currentStr = current.toISOString().split('T')[0];
+  
+  if (originalStartStr.includes('02-29') || originalStartStr.includes('02-28') || currentStr.includes('2026-01-10')) {
+    console.log('DEBUG calculateCumulativeVacationEntitlement:', {
+      originalStart: originalStartStr,
+      normalizedStart: normalizedStartStr,
+      currentDate: currentStr,
+    });
+  }
+  
   // Check if employee has completed 90-day trial period
   const daysSinceStart = Math.floor(
     (current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
@@ -118,6 +181,7 @@ export function calculateCumulativeVacationEntitlement(
   }
 
   // Calculate completed full years of service
+  // Make sure we're using the normalized start date for all comparisons
   const startYear = start.getFullYear();
   const currentYear = current.getFullYear();
   const startMonth = start.getMonth();
@@ -127,6 +191,7 @@ export function calculateCumulativeVacationEntitlement(
 
   let completedYears = currentYear - startYear;
 
+  // If the current date is before the anniversary in the current year, they haven't completed that year yet
   if (
     currentMonth < startMonth ||
     (currentMonth === startMonth && currentDay < startDay)
@@ -135,6 +200,21 @@ export function calculateCumulativeVacationEntitlement(
   }
 
   completedYears = Math.max(0, completedYears);
+  
+  // Debug: Log calculation details for Feb 29 cases
+  if (originalStartStr.includes('02-29') || originalStartStr.includes('02-28') || currentStr.includes('2026-01-10')) {
+    console.log('DEBUG calculateCumulativeVacationEntitlement calculation:', {
+      daysSinceStart,
+      startYear,
+      currentYear,
+      startMonth,
+      currentMonth,
+      startDay,
+      currentDay,
+      completedYears,
+      willReturn: completedYears === 0 ? 0 : completedYears === 1 ? 10 : completedYears === 2 ? 22 : completedYears === 3 ? 37 : 10 + 12 + 15 + (20 * (completedYears - 3)),
+    });
+  }
 
   // Calculate cumulative total by summing entitlements for each completed year
   // After completion of 1st year: 10 days

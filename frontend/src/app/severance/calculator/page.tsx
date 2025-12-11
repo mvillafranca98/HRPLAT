@@ -23,6 +23,9 @@ import {
   calculateCesantiaProportionalDays,
 } from '@/lib/severanceFormCalculations';
 
+// Import vacation balance calculations
+import { calculateCumulativeVacationEntitlement } from '@/lib/vacationBalance';
+
 interface SalaryHistory {
   month: string;
   year: number;
@@ -311,12 +314,16 @@ export default function SeveranceCalculator() {
       ? calculateVacationProportionalDays(startDate, terminationDate, vacationDaysEntitlement)
       : 0;
     
+    // Recalculate cumulative vacation entitlement based on termination date (not today's date)
+    const cumulativeVacationEntitlement = calculateCumulativeVacationEntitlement(startDate, terminationDate);
+    
     setFormData(prev => ({
       ...prev,
       preavisoDays: requiredPreavisoDays,
       cesantiaDays,
       cesantiaProportionalDays,
       vacationProportionalDays,
+      cumulativeVacationEntitlement, // Update with recalculated value based on termination date
     }));
     
     // DEBUG: Log the value being set

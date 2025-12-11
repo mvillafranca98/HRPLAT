@@ -80,6 +80,54 @@ export function calculateServicePeriod(
 }
 
 /**
+ * Normalize start date: if it's Feb 29, convert to Feb 28 for calculations
+ * This ensures calculations work correctly while preserving the original date for display
+ * Handles both Date objects and date strings in YYYY-MM-DD format
+ */
+function normalizeStartDateForCalculations(date: Date | string): Date {
+  let d: Date;
+  let originalYear: number;
+  let originalMonth: number;
+  let originalDay: number;
+  
+  if (typeof date === 'string') {
+    // Parse string date (YYYY-MM-DD format)
+    const parts = date.split('-').map(Number);
+    originalYear = parts[0];
+    originalMonth = parts[1]; // 1-12 format
+    originalDay = parts[2];
+    
+    // Check the original string first - if it was Feb 29, normalize to Feb 28
+    if (originalMonth === 2 && originalDay === 29) {
+      return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+    }
+    
+    d = new Date(originalYear, originalMonth - 1, originalDay);
+  } else {
+    d = date;
+    originalYear = d.getFullYear();
+    originalMonth = d.getMonth() + 1; // Convert to 1-12 format
+    originalDay = d.getDate();
+  }
+  
+  // Double-check: if it's February 29th, normalize to February 28th
+  // This handles both Date objects and edge cases
+  if (originalMonth === 2 && originalDay === 29) {
+    return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+  }
+  
+  // Also check the Date object's actual values (handles timezone issues)
+  const month = d.getMonth();
+  const day = d.getDate();
+  if (month === 1 && day === 29) {
+    const year = d.getFullYear();
+    return new Date(year, 1, 28);
+  }
+  
+  return d;
+}
+
+/**
  * Helper function to check if a year is a leap year
  */
 function isLeapYear(year: number): boolean {
@@ -239,8 +287,11 @@ export function calculateVacationProportionalDays(
 ): number {
   if (!startDate || !terminationDate || !vacationDaysEntitlement) return 0;
   
-  // Get last anniversary before termination date
-  const lastAnniversary = getLastAnniversaryDate(startDate, terminationDate);
+  // Normalize start date: Feb 29 → Feb 28 for calculations
+  const normalizedStartDate = normalizeStartDateForCalculations(startDate);
+  
+  // Get last anniversary before termination date (using normalized start date)
+  const lastAnniversary = getLastAnniversaryDate(normalizedStartDate, terminationDate);
   
   // Count days FROM the anniversary date (inclusive) to termination date
   // Breakdown: (remaining days in anniversary month) + (full months) + (days in termination month)
