@@ -298,8 +298,10 @@ export function calculateSeveranceBenefits(
   const severancePay = severanceDays * dailySalary;
   
   // Auxilio de Cesantía Proporcional
-  // For months worked beyond full years
-  const proportionalSeveranceDays = (data.monthsOfService / 12) * 20; // 20 days per year / 12 months
+  // Pro-rate using months and days beyond full years with 30-day year base
+  // Formula: ((months*30 + days) / 12) == (((months*30 + days) * 30) / 360)
+  const proportionalSeveranceDays =
+    ((data.monthsOfService * 30) + data.daysOfService) / 12;
   const proportionalSeverancePay = proportionalSeveranceDays * dailySalary;
   
   // Vacation Pay (already accrued)

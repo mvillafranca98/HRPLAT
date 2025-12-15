@@ -141,9 +141,11 @@ function calculateSalaryAverages(salaryHistory: Array<{ amount: number; overtime
   const basePromAverage = totalWithOvertime / withOvertime.length;
   
   const baseMonthly = salaries[salaries.length - 1] || baseAverage;
-  const promAverage = (baseMonthly * 14) / 12;
+  // Usar los ultimos 6 meses para el promedio mensual
+  const monthlyAverage = baseAverage;
+  const promAverage = (monthlyAverage * 14) / 12;
   const promDaily = promAverage / 30;
-  const baseDaily = baseMonthly / 30; // Use baseMonthly, not baseAverage
+  const baseDaily = monthlyAverage / 30; // salario diario promedio basado en los ultimos 6 meses
   
   return {
     baseMonthly,
