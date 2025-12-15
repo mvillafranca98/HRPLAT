@@ -24,7 +24,10 @@ import {
 } from '@/lib/severanceFormCalculations';
 
 // Import vacation balance calculations
-import { calculateCumulativeVacationEntitlement } from '@/lib/vacationBalance';
+import {
+  calculateCumulativeVacationEntitlement,
+  calculateVacationEntitlement,
+} from '@/lib/vacationBalance';
 
 interface SalaryHistory {
   month: string;
@@ -228,7 +231,8 @@ export default function SeveranceCalculator() {
           dni: data.dni || '',
           startDate: data.startDate || '',
           lastAnniversaryDate: data.lastAnniversaryDate || '',
-          vacationDaysRemaining: data.vacationDaysRemaining || 0,
+          // Dias de vacaciones restantes no influye en el calculo de prestaciones
+          vacationDaysRemaining: 0,
           vacationDaysEntitlement: data.vacationDaysEntitlement || 0,
           cumulativeVacationEntitlement: data.cumulativeVacationEntitlement || 0,
           salaryHistory: data.salaryHistory || [],
@@ -316,6 +320,9 @@ export default function SeveranceCalculator() {
     
     // Recalculate cumulative vacation entitlement based on termination date (not today's date)
     const cumulativeVacationEntitlement = calculateCumulativeVacationEntitlement(startDate, terminationDate);
+
+    // Auto calcular dias de vacaciones (según antigüedad) para el ciclo actual
+    const autoVacationDaysEntitlement = calculateVacationEntitlement(startDate, terminationDate);
     
     setFormData(prev => ({
       ...prev,
@@ -324,6 +331,7 @@ export default function SeveranceCalculator() {
       cesantiaProportionalDays,
       vacationProportionalDays,
       cumulativeVacationEntitlement, // Update with recalculated value based on termination date
+      vacationDaysEntitlement: autoVacationDaysEntitlement,
     }));
     
     // DEBUG: Log the value being set
@@ -807,7 +815,7 @@ export default function SeveranceCalculator() {
                     onChange={(e) => setFormData(prev => ({ ...prev, cesantiaProportionalDays: parseFloat(e.target.value) || 0 }))}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
                     min="0"
-                    step="0.01"
+                    step="any"
                   />
                 </div>
                 <div>
@@ -834,7 +842,7 @@ export default function SeveranceCalculator() {
                     onChange={(e) => setFormData(prev => ({ ...prev, vacationProportionalDays: parseFloat(e.target.value) || 0 }))}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
                     min="0"
-                    step="0.01"
+                    step="any"
                   />
                   <p className="mt-1 text-xs text-gray-500">Días de vacaciones restantes / 12</p>
                 </div>
@@ -849,7 +857,7 @@ export default function SeveranceCalculator() {
                     onChange={(e) => setFormData(prev => ({ ...prev, thirteenthMonthDays: parseFloat(e.target.value) || 0 }))}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
                     min="0"
-                    step="0.01"
+                    step="any"
                   />
                   <p className="mt-1 text-xs text-gray-500">Días desde fecha inicio hasta retiro (30 días por mes)</p>
                 </div>
@@ -877,7 +885,7 @@ export default function SeveranceCalculator() {
                     onChange={(e) => setFormData(prev => ({ ...prev, fourteenthMonthDays: parseFloat(e.target.value) || 0 }))}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
                     min="0"
-                    step="0.01"
+                    step="any"
                   />
                   <p className="mt-1 text-xs text-gray-500">Días desde fecha inicio hasta retiro (30 días por mes)</p>
                 </div>

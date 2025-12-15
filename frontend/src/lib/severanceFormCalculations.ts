@@ -264,7 +264,8 @@ export function calculateCesantiaProportionalDays(
     rounded: Math.round(cesantiaProDays * 100) / 100
   });
   
-  return Math.round(cesantiaProDays * 100) / 100; // Round to 2 decimals 
+  // Return full precision - rounding will be done only for display in PDF
+  return cesantiaProDays; 
 }
 
 /**
@@ -306,7 +307,8 @@ export function calculateVacationProportionalDays(
   // Formula: (days / 360) * vacation entitlement
   const proportionalDays = (totalDays / 360) * vacationDaysEntitlement;
   
-  return Math.round(proportionalDays * 100) / 100; // Round to 2 decimals
+  // Return full precision - rounding will be done only for display in PDF
+  return proportionalDays;
 }
 
 /**

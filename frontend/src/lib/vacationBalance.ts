@@ -114,25 +114,22 @@ export function calculateVacationEntitlement(
 
   // Ensure at least 0 years
   completedYears = Math.max(0, completedYears);
-
-  // Apply Honduras vacation law based on completed years:
-  // - After completion of 1st year (1 completed year): 10 days
-  // - After completion of 2nd year (2 completed years): 12 days  
-  // - After completion of 3rd year (3 completed years): 15 days
-  // - After completion of 4th year (4+ completed years): 20 days
-  // 
-  // Note: Employees get 10 days during their first year (after 90-day trial)
-  // Example: 1 year, 10 months, 22 days = completedYears === 1 → 10 days
-  if (completedYears === 0) {
-    return 10; // First year: 10 days (after 90-day trial period, which is checked above)
-  } else if (completedYears === 1) {
-    return 10; // After completion of 1st year: 10 days (still in second year, haven't completed 2nd year yet)
-  } else if (completedYears === 2) {
-    return 12; // After completion of 2nd year: 12 days
-  } else if (completedYears === 3) {
-    return 15; // After completion of 3rd year: 15 days
+  
+  // Apply vacation law based on the CURRENT cycle being worked:
+  // Cycle 1 (0–<1 year, after 90 days): 10 days
+  // Cycle 2 (1–<2 years): 12 days
+  // Cycle 3 (2–<3 years): 15 days
+  // Cycle 4+ (3+ years): 20 days
+  const cycle = completedYears + 1;
+  
+  if (cycle <= 1) {
+    return 10;
+  } else if (cycle === 2) {
+    return 12;
+  } else if (cycle === 3) {
+    return 15;
   } else {
-    return 20; // After completion of 4th year and above: 20 days
+    return 20;
   }
 }
 

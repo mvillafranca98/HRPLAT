@@ -281,21 +281,32 @@ export async function generateSeverancePDFFromForm(
   // Calculate benefits (KEEP ALL FORMULAS EXACTLY THE SAME)
   const preavisoPay = roundCurrency(formData.preavisoDays * salaryAvgs.promDaily);
   const cesantiaPay = roundCurrency(formData.cesantiaDays * salaryAvgs.promDaily);
-  const cesantiaProPay = roundCurrency(formData.cesantiaProportionalDays * salaryAvgs.promDaily);
+  
+  // AUXILIO DE CESANTIA PROPORCIONAL: Use full precision for calculation, round only for display
+  const cesantiaProDaysFullPrecision = formData.cesantiaProportionalDays; // Already full precision from calculation
+  const cesantiaProPay = roundCurrency(cesantiaProDaysFullPrecision * salaryAvgs.promDaily);
+  const cesantiaProDaysDisplay = roundTo2Decimals(cesantiaProDaysFullPrecision); // Round only for display
+  
   // VACACIONES: Use cumulative total (stacked across all years)
   const cumulativeVacationPay = roundCurrency(formData.cumulativeVacationEntitlement * salaryAvgs.promDaily);
   const vacationBonusPay = roundCurrency(formData.vacationBonusDays * salaryAvgs.promDaily);
   
-  const vacationProDays = roundTo2Decimals(formData.vacationProportionalDays);
-  const vacationProPay = roundCurrency(vacationProDays * salaryAvgs.promDaily);
+  // VACACIONES PROPORCIONALES: Use full precision for calculation, round only for display
+  const vacationProDaysFullPrecision = formData.vacationProportionalDays; // Already full precision from calculation
+  const vacationProPay = roundCurrency(vacationProDaysFullPrecision * salaryAvgs.promDaily);
+  const vacationProDaysDisplay = roundTo2Decimals(vacationProDaysFullPrecision); // Round only for display
   
   // DECIMO TERCER MES: use (thirteenthMonthDays * 30 / 360) días x baseDaily
-  const thirteenthDays = roundTo2Decimals((formData.thirteenthMonthDays * 30) / 360);
-  const thirteenthPay = roundCurrency(thirteenthDays * salaryAvgs.baseDaily);
+  // Use full precision for calculation, round only for display
+  const thirteenthDaysFullPrecision = (formData.thirteenthMonthDays * 30) / 360;
+  const thirteenthPay = roundCurrency(thirteenthDaysFullPrecision * salaryAvgs.baseDaily);
+  const thirteenthDaysDisplay = roundTo2Decimals(thirteenthDaysFullPrecision); // Round only for display
   
   // DECIMO CUARTO MES: use (fourteenthMonthDays * 30 / 360) días x baseDaily
-  const fourteenthDays = roundTo2Decimals((formData.fourteenthMonthDays * 30) / 360);
-  const fourteenthPay = roundCurrency(fourteenthDays * salaryAvgs.baseDaily);
+  // Use full precision for calculation, round only for display
+  const fourteenthDaysFullPrecision = (formData.fourteenthMonthDays * 30) / 360;
+  const fourteenthPay = roundCurrency(fourteenthDaysFullPrecision * salaryAvgs.baseDaily);
+  const fourteenthDaysDisplay = roundTo2Decimals(fourteenthDaysFullPrecision); // Round only for display
   
   const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + cumulativeVacationPay + vacationBonusPay + 
                         vacationProPay + thirteenthPay + fourteenthPay + formData.salariesDue + 
@@ -393,7 +404,7 @@ export async function generateSeverancePDFFromForm(
   
   // AUXILIO DE CESANTIA PROPORCIONAL
   drawText('AUXILIO DE CESANTIA PROPORCIONAL', cols.label, yPosition, 10, false);
-  drawText(formatNumber(formData.cesantiaProportionalDays, 2), cols.days, yPosition, 10, false);
+  drawText(formatNumber(cesantiaProDaysDisplay, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
   drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(cesantiaProPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
@@ -409,7 +420,7 @@ export async function generateSeverancePDFFromForm(
   
   // VACACIONES PROPORCIONALES
   drawText('VACACIONES PROPORCIONALES', cols.label, yPosition, 10, false);
-  drawText(formatNumber(vacationProDays, 2), cols.days, yPosition, 10, false);
+  drawText(formatNumber(vacationProDaysDisplay, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
   drawTextRight(formatCurrency(salaryAvgs.promDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(vacationProPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
@@ -426,7 +437,7 @@ export async function generateSeverancePDFFromForm(
   
   // DECIMO TERCER MES - Use baseDaily for rate display
   drawText('DECIMO TERCER MES', cols.label, yPosition, 10, false);
-  drawText(formatNumber(thirteenthDays, 2), cols.days, yPosition, 10, false);
+  drawText(formatNumber(thirteenthDaysDisplay, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
   drawTextRight(formatCurrency(salaryAvgs.baseDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(thirteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
@@ -441,7 +452,7 @@ export async function generateSeverancePDFFromForm(
   
   // DECIMO CUARTO MES - Use baseDaily for rate display
   drawText('DECIMO CUARTO MES', cols.label, yPosition, 10, false);
-  drawText(formatNumber(fourteenthDays, 2), cols.days, yPosition, 10, false);
+  drawText(formatNumber(fourteenthDaysDisplay, 2), cols.days, yPosition, 10, false);
   drawText('x', cols.multiplier, yPosition, 10, false);
   drawTextRight(formatCurrency(salaryAvgs.baseDaily).replace('L. ', ''), cols.rate + 20, yPosition, 9, false);
   drawTextRight(formatCurrency(fourteenthPay).replace('L. ', ''), cols.amount, yPosition, 10, false);
