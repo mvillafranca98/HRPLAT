@@ -82,12 +82,61 @@ function maskDNI(dni: string): string {
 }
 
 /**
+ * Normalize start date: if it's Feb 29, convert to Feb 28 for calculations
+ * This ensures calculations work correctly while preserving the original date for display
+ * Handles both Date objects and date strings in YYYY-MM-DD format
+ */
+function normalizeStartDateForCalculations(date: Date | string): Date {
+  let d: Date;
+  let originalYear: number;
+  let originalMonth: number;
+  let originalDay: number;
+  
+  if (typeof date === 'string') {
+    // Parse string date (YYYY-MM-DD format)
+    const parts = date.split('-').map(Number);
+    originalYear = parts[0];
+    originalMonth = parts[1]; // 1-12 format
+    originalDay = parts[2];
+    
+    // Check the original string first - if it was Feb 29, normalize to Feb 28
+    if (originalMonth === 2 && originalDay === 29) {
+      return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+    }
+    
+    d = new Date(originalYear, originalMonth - 1, originalDay);
+  } else {
+    d = date;
+    originalYear = d.getFullYear();
+    originalMonth = d.getMonth() + 1; // Convert to 1-12 format
+    originalDay = d.getDate();
+  }
+  
+  // Double-check: if it's February 29th, normalize to February 28th
+  // This handles both Date objects and edge cases
+  if (originalMonth === 2 && originalDay === 29) {
+    return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+  }
+  
+  // Also check the Date object's actual values (handles timezone issues)
+  const month = d.getMonth();
+  const day = d.getDate();
+  if (month === 1 && day === 29) {
+    const year = d.getFullYear();
+    return new Date(year, 1, 28);
+  }
+  
+  return d;
+}
+
+/**
  * Calculate service period (years, months, days)
  */
 function calculateServicePeriod(startDate: string, endDate: string): { years: number; months: number; days: number; totalDays: number } {
   if (!startDate || !endDate) return { years: 0, months: 0, days: 0, totalDays: 0 };
   
-  const start = new Date(startDate);
+  // Normalize Feb 29 to Feb 28 for accurate calculations
+  const start = normalizeStartDateForCalculations(startDate);
   const end = new Date(endDate);
   
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
@@ -297,16 +346,16 @@ export async function generateSeverancePDFFromForm(
   const vacationProDaysDisplay = roundTo2Decimals(vacationProDaysFullPrecision); // Round only for display
   
   // DECIMO TERCER MES: use (thirteenthMonthDays * 30 / 360) días x baseDaily
-  // Use full precision for calculation, round only for display
+  // Round days first, then multiply, then round currency
   const thirteenthDaysFullPrecision = (formData.thirteenthMonthDays * 30) / 360;
-  const thirteenthPay = roundCurrency(thirteenthDaysFullPrecision * salaryAvgs.baseDaily);
-  const thirteenthDaysDisplay = roundTo2Decimals(thirteenthDaysFullPrecision); // Round only for display
+  const thirteenthDaysDisplay = roundTo2Decimals(thirteenthDaysFullPrecision); // Round days first
+  const thirteenthPay = roundCurrency(thirteenthDaysDisplay * salaryAvgs.baseDaily); // Multiply rounded days, then round currency
   
   // DECIMO CUARTO MES: use (fourteenthMonthDays * 30 / 360) días x baseDaily
-  // Use full precision for calculation, round only for display
+  // Round days first, then multiply, then round currency
   const fourteenthDaysFullPrecision = (formData.fourteenthMonthDays * 30) / 360;
-  const fourteenthPay = roundCurrency(fourteenthDaysFullPrecision * salaryAvgs.baseDaily);
-  const fourteenthDaysDisplay = roundTo2Decimals(fourteenthDaysFullPrecision); // Round only for display
+  const fourteenthDaysDisplay = roundTo2Decimals(fourteenthDaysFullPrecision); // Round days first
+  const fourteenthPay = roundCurrency(fourteenthDaysDisplay * salaryAvgs.baseDaily); // Multiply rounded days, then round currency
   
   const totalBenefits = preavisoPay + cesantiaPay + cesantiaProPay + cumulativeVacationPay + vacationBonusPay + 
                         vacationProPay + thirteenthPay + fourteenthPay + formData.salariesDue + 

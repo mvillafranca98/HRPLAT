@@ -29,12 +29,26 @@ import {
 
 import { calculateVacationEntitlement, calculateCumulativeVacationEntitlement } from '../lib/vacationBalance';
 
+// Helper function to round to 2 decimals
+function roundTo2Decimals(num: number): number {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+// Helper function to round currency
+function roundCurrency(num: number): number {
+  return parseFloat(num.toFixed(2));
+}
+
 // Helper function to calculate salary averages
+// Note: In the PDF generator, this uses 6-month average, but for testing we use single salary
 function calculateSalaryAverages(monthlySalary: number) {
   const baseMonthly = monthlySalary;
-  const promAverage = (baseMonthly * 14) / 12; // Sueldo mensual promedio
+  // Usar los ultimos 6 meses para el promedio mensual (en el PDF usa baseAverage de 6 meses)
+  // Para el test, usamos el salario mensual como promedio
+  const monthlyAverage = monthlySalary; // En producción sería el promedio de 6 meses
+  const promAverage = (monthlyAverage * 14) / 12; // Sueldo mensual promedio
   const promDaily = promAverage / 30; // Sueldo diario promedio
-  const baseDaily = baseMonthly / 30; // Sueldo diario ordinario
+  const baseDaily = monthlyAverage / 30; // salario diario promedio basado en los ultimos 6 meses
   
   return {
     baseMonthly,
@@ -64,9 +78,57 @@ function formatDate(date: Date | string): string {
   return `${day}/${month}/${year}`;
 }
 
+/**
+ * Normalize start date: if it's Feb 29, convert to Feb 28 for calculations
+ * This ensures calculations work correctly while preserving the original date for display
+ */
+function normalizeStartDateForCalculations(date: Date | string): Date {
+  let d: Date;
+  let originalYear: number;
+  let originalMonth: number;
+  let originalDay: number;
+  
+  if (typeof date === 'string') {
+    // Parse string date (YYYY-MM-DD format)
+    const parts = date.split('-').map(Number);
+    originalYear = parts[0];
+    originalMonth = parts[1]; // 1-12 format
+    originalDay = parts[2];
+    
+    // Check the original string first - if it was Feb 29, normalize to Feb 28
+    if (originalMonth === 2 && originalDay === 29) {
+      return new Date(originalYear, 1, 28); // month is 0-indexed, so 1 = February
+    }
+    
+    d = new Date(originalYear, originalMonth - 1, originalDay);
+  } else {
+    d = date;
+    originalYear = d.getFullYear();
+    originalMonth = d.getMonth() + 1; // Convert to 1-12 format
+    originalDay = d.getDate();
+  }
+  
+  // Double-check: if it's February 29th, normalize to February 28th
+  if (originalMonth === 2 && originalDay === 29) {
+    return new Date(originalYear, 1, 28);
+  }
+  
+  // Also check the Date object's actual values (handles timezone issues)
+  const month = d.getMonth();
+  const day = d.getDate();
+  if (month === 1 && day === 29) {
+    const year = d.getFullYear();
+    return new Date(year, 1, 28);
+  }
+  
+  return d;
+}
+
 // Helper function to calculate service period display
 function calculateServicePeriodDisplay(startDate: string, terminationDate: string): string {
-  const start = parseLocalDate(startDate);
+  // Normalize Feb 29 to Feb 28 for accurate calculations (matching PDF generator)
+  const normalizedStart = normalizeStartDateForCalculations(startDate);
+  const start = typeof normalizedStart === 'string' ? parseLocalDate(normalizedStart) : normalizedStart;
   const termination = parseLocalDate(terminationDate);
   
   let years = termination.getFullYear() - start.getFullYear();
@@ -121,25 +183,38 @@ function calculateSeverancePayments(
   // Calculate 13th month days
   const lastJan1st = getLastJanuary1st(terminationDate);
   const thirteenthMonthDays = calculateThirteenthMonthDays(lastJan1st, terminationDate);
-  const thirteenthDaysConverted = (thirteenthMonthDays * 30) / 360;
   
   // Calculate 14th month days
   const lastJuly1st = getLastJuly1st(terminationDate);
   const fourteenthMonthDays = calculateFourteenthMonthDays(lastJuly1st, terminationDate);
-  const fourteenthDaysConverted = (fourteenthMonthDays * 30) / 360;
 
   // Get last anniversary for vacation proportional display
   const lastAnniversary = getLastAnniversaryDate(startDate, terminationDate);
   
-  // Calculate payments
-  const preavisoPay = preavisoDays * salaryAvgs.promDaily;
-  const cesantiaPay = cesantiaDays * salaryAvgs.promDaily;
-  const cesantiaProPay = cesantiaProportionalDays * salaryAvgs.promDaily;
+  // Calculate payments (matching PDF generator rounding logic)
+  const preavisoPay = roundCurrency(preavisoDays * salaryAvgs.promDaily);
+  const cesantiaPay = roundCurrency(cesantiaDays * salaryAvgs.promDaily);
+  
+  // AUXILIO DE CESANTIA PROPORCIONAL: Use full precision for calculation, round only for display
+  const cesantiaProDaysFullPrecision = cesantiaProportionalDays; // Already full precision from calculation
+  const cesantiaProPay = roundCurrency(cesantiaProDaysFullPrecision * salaryAvgs.promDaily);
+  
   // VACACIONES: Use cumulative total (stacked across all years) - matching PDF generation
-  const vacationPay = cumulativeVacationEntitlement * salaryAvgs.promDaily;
-  const vacationProPay = vacationProportionalDays * salaryAvgs.promDaily;
-  const thirteenthPay = thirteenthDaysConverted * salaryAvgs.baseDaily;
-  const fourteenthPay = fourteenthDaysConverted * salaryAvgs.baseDaily;
+  const vacationPay = roundCurrency(cumulativeVacationEntitlement * salaryAvgs.promDaily);
+  
+  // VACACIONES PROPORCIONALES: Use full precision for calculation, round only for display
+  const vacationProDaysFullPrecision = vacationProportionalDays; // Already full precision from calculation
+  const vacationProPay = roundCurrency(vacationProDaysFullPrecision * salaryAvgs.promDaily);
+  
+  // DECIMO TERCER MES: Round days first, then multiply, then round currency
+  const thirteenthDaysFullPrecision = (thirteenthMonthDays * 30) / 360;
+  const thirteenthDaysDisplay = roundTo2Decimals(thirteenthDaysFullPrecision); // Round days first
+  const thirteenthPay = roundCurrency(thirteenthDaysDisplay * salaryAvgs.baseDaily); // Multiply rounded days, then round currency
+  
+  // DECIMO CUARTO MES: Round days first, then multiply, then round currency
+  const fourteenthDaysFullPrecision = (fourteenthMonthDays * 30) / 360;
+  const fourteenthDaysDisplay = roundTo2Decimals(fourteenthDaysFullPrecision); // Round days first
+  const fourteenthPay = roundCurrency(fourteenthDaysDisplay * salaryAvgs.baseDaily); // Multiply rounded days, then round currency
   
   // Total prestaciones
   const totalPrestaciones = preavisoPay + cesantiaPay + cesantiaProPay + 
@@ -160,10 +235,10 @@ function calculateSeverancePayments(
     vacationProportionalDays,
     vacationProPay,
     thirteenthMonthDays,
-    thirteenthDaysConverted,
+    thirteenthDaysConverted: thirteenthDaysDisplay, // Use rounded display value (matching PDF)
     thirteenthPay,
     fourteenthMonthDays,
-    fourteenthDaysConverted,
+    fourteenthDaysConverted: fourteenthDaysDisplay, // Use rounded display value (matching PDF)
     fourteenthPay,
     totalPrestaciones,
     lastJan1st,
@@ -194,7 +269,8 @@ function printResults(results: ReturnType<typeof calculateSeverancePayments>, st
   console.log(`  ${results.cesantiaDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.cesantiaPay)}\n`);
   
   console.log(`Auxilio de Cesantía Proporcional:`);
-  console.log(`  ${results.cesantiaProportionalDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.cesantiaProPay)}\n`);
+  const cesantiaProDaysDisplay = roundTo2Decimals(results.cesantiaProportionalDays);
+  console.log(`  ${cesantiaProDaysDisplay.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.cesantiaProPay)}\n`);
   
   console.log(`Vacaciones:`);
   // Display cumulative entitlement instead of remaining days - matching PDF generation
@@ -202,15 +278,18 @@ function printResults(results: ReturnType<typeof calculateSeverancePayments>, st
   console.log(`  (Entitlement acumulado: ${results.cumulativeVacationEntitlement} días, Entitlement ciclo actual: ${results.vacationEntitlement} días)\n`);
   
   console.log(`Vacaciones Proporcionales:`);
-  console.log(`  ${results.vacationProportionalDays.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationProPay)}`);
+  const vacationProDaysDisplay = roundTo2Decimals(results.vacationProportionalDays);
+  console.log(`  ${vacationProDaysDisplay.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.promDaily)} = ${formatCurrency(results.vacationProPay)}`);
   console.log(`  (Desde: ${formatDate(results.lastAnniversary)} Hasta: ${formatDate(terminationDate)})\n`);
   
   console.log(`Décimo Tercer Mes:`);
-  console.log(`  ${results.thirteenthDaysConverted.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.baseDaily)} = ${formatCurrency(results.thirteenthPay)}`);
+  const thirteenthDaysDisplay = roundTo2Decimals((results.thirteenthMonthDays * 30) / 360);
+  console.log(`  ${thirteenthDaysDisplay.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.baseDaily)} = ${formatCurrency(results.thirteenthPay)}`);
   console.log(`  (Desde: ${formatDate(results.lastJan1st)} Hasta: ${formatDate(terminationDate)})\n`);
   
   console.log(`Décimo Cuarto Mes:`);
-  console.log(`  ${results.fourteenthDaysConverted.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.baseDaily)} = ${formatCurrency(results.fourteenthPay)}`);
+  const fourteenthDaysDisplay = roundTo2Decimals((results.fourteenthMonthDays * 30) / 360);
+  console.log(`  ${fourteenthDaysDisplay.toFixed(2)} días x ${formatCurrency(results.salaryAvgs.baseDaily)} = ${formatCurrency(results.fourteenthPay)}`);
   console.log(`  (Desde: ${formatDate(results.lastJuly1st)} Hasta: ${formatDate(terminationDate)})\n`);
   
   console.log('═══════════════════════════════════════════════════════════════');
